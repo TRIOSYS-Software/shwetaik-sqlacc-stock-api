@@ -1,0 +1,7 @@
+.env
+build/
+.air.toml
+tmp/
+go.sum
+*.test
+.vscode/
