@@ -24,3 +24,13 @@ type STItemPrice struct {
 func (STItemPrice) TableName() string {
 	return "ST_ITEM_PRICE"
 }
+
+// func (s *STItemPrice) BeforeCreate(db *gorm.DB) error {
+// 	var maxSeq int
+// 	err := db.Model(s).Select("MAX(SEQ)").Where("CODE = ?", s.Code).Scan(&maxSeq).Error
+// 	if err != nil {
+// 		return err
+// 	}
+// 	s.Seq = maxSeq + 1000
+// 	return nil
+// }

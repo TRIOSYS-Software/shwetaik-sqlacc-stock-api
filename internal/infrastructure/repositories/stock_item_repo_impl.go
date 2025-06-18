@@ -30,6 +30,6 @@ func (r *StockItemRepositoryImpl) GetAllStockItems(limt int, offset int) ([]enti
 
 func (r *StockItemRepositoryImpl) GetStockItemByCode(code string) (*entities.STItem, error) {
 	var stockItem entities.STItem
-	err := r.db.Where("code = ?", code).First(&stockItem).Error
+	err := r.db.Where("code = ?", code).Preload("STItemPrices").First(&stockItem).Error
 	return &stockItem, err
 }

@@ -21,6 +21,7 @@ func SetupRoutes(app *fiber.App, db *gorm.DB) {
 
 	api.Use(middleware.AuthMiddleware)
 	initStockItemRoutes(api, db)
+	initStockItemPriceRoutes(api, db)
 }
 
 func initStockItemRoutes(api fiber.Router, db *gorm.DB) {
@@ -29,4 +30,16 @@ func initStockItemRoutes(api fiber.Router, db *gorm.DB) {
 	stockItemHandler := handlers.NewStockItemHandler(stockItemUsecase)
 
 	api.Get("/stock-items", stockItemHandler.GetAllStockItems)
+	api.Get("/stock-items/:code", stockItemHandler.GetStockItemByCode)
+}
+
+func initStockItemPriceRoutes(api fiber.Router, db *gorm.DB) {
+	stockItemPriceRepo := repositories.NewStockItemPriceRepository(db)
+	stockItemPriceUsecase := usecases.NewStockItemPriceUseCase(stockItemPriceRepo)
+	stockItemPriceHandler := handlers.NewStockItemPriceHandler(stockItemPriceUsecase)
+
+	api.Get("/stock-items/:code/prices", stockItemPriceHandler.GetStockItemPricesByCode)
+	api.Get("/stock-items/:code/prices/:dtlKey", stockItemPriceHandler.GetStockItemPriceByDTLKey)
+	api.Post("/stock-items/:code/prices", stockItemPriceHandler.CreateStockItemPrice)
+	api.Put("/stock-items/:code/prices/:dtlKey", stockItemPriceHandler.UpdateStockItemPrice)
 }
