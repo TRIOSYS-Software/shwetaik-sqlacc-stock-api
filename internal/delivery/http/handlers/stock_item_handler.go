@@ -18,9 +18,13 @@ func NewStockItemHandler(usecase *usecases.StockItemUseCase) *StockItemHandler {
 }
 
 func (s *StockItemHandler) GetAllStockItems(c *fiber.Ctx) error {
-	limit := c.QueryInt("limit")
-	offset := c.QueryInt("offset")
-	stockItems, err := s.usecase.GetAllStockItems(limit, offset)
+	filter := make(map[string]any)
+	filter["limit"] = c.QueryInt("limit")
+	filter["offset"] = c.QueryInt("offset")
+	filter["stock_group"] = c.Query("stock_group", "")
+	filter["description"] = c.Query("description", "")
+
+	stockItems, err := s.usecase.GetAllStockItems(filter)
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, err.Error())
 	}
@@ -32,7 +36,7 @@ func (s *StockItemHandler) GetAllStockItems(c *fiber.Ctx) error {
 			stockItemPricesDTO = append(stockItemPricesDTO, dto.StockItemPriceResponse{
 				DtlKey:     stockItemPrice.DtlKey,
 				Code:       stockItemPrice.Code,
-				PriceTag:   *stockItemPrice.PriceTag,
+				PriceTag:   stockItemPrice.PriceTag,
 				UOM:        stockItemPrice.UOM,
 				Qty:        stockItemPrice.Qty,
 				StockValue: stockItemPrice.StockValue,
@@ -64,7 +68,7 @@ func (s *StockItemHandler) GetStockItemByCode(c *fiber.Ctx) error {
 		stockItemPriceDTO = append(stockItemPriceDTO, dto.StockItemPriceResponse{
 			DtlKey:     stockItemPrice.DtlKey,
 			Code:       stockItemPrice.Code,
-			PriceTag:   *stockItemPrice.PriceTag,
+			PriceTag:   stockItemPrice.PriceTag,
 			UOM:        stockItemPrice.UOM,
 			Qty:        stockItemPrice.Qty,
 			StockValue: stockItemPrice.StockValue,

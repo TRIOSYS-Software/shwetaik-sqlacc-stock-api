@@ -34,7 +34,7 @@ func (s *StockItemPriceHandler) GetStockItemPricesByCode(c *fiber.Ctx) error {
 		response = append(response, dto.StockItemPriceResponse{
 			DtlKey:     stockItemPrice.DtlKey,
 			Code:       stockItemPrice.Code,
-			PriceTag:   *stockItemPrice.PriceTag,
+			PriceTag:   stockItemPrice.PriceTag,
 			UOM:        stockItemPrice.UOM,
 			Qty:        stockItemPrice.Qty,
 			StockValue: stockItemPrice.StockValue,
@@ -60,7 +60,7 @@ func (s *StockItemPriceHandler) GetStockItemPriceByDTLKey(c *fiber.Ctx) error {
 	response := dto.StockItemPriceResponse{
 		DtlKey:     stockItemPrice.DtlKey,
 		Code:       stockItemPrice.Code,
-		PriceTag:   *stockItemPrice.PriceTag,
+		PriceTag:   stockItemPrice.PriceTag,
 		UOM:        stockItemPrice.UOM,
 		Qty:        stockItemPrice.Qty,
 		StockValue: stockItemPrice.StockValue,
@@ -92,7 +92,7 @@ func (s *StockItemPriceHandler) CreateStockItemPrice(c *fiber.Ctx) error {
 	response := dto.StockItemPriceResponse{
 		DtlKey:     stockItemPrice.DtlKey,
 		Code:       stockItemPrice.Code,
-		PriceTag:   *stockItemPrice.PriceTag,
+		PriceTag:   stockItemPrice.PriceTag,
 		UOM:        stockItemPrice.UOM,
 		Qty:        stockItemPrice.Qty,
 		StockValue: stockItemPrice.StockValue,
@@ -130,7 +130,7 @@ func (s *StockItemPriceHandler) UpdateStockItemPrice(c *fiber.Ctx) error {
 	response := dto.StockItemPriceResponse{
 		DtlKey:     stockItemPrice.DtlKey,
 		Code:       stockItemPrice.Code,
-		PriceTag:   *stockItemPrice.PriceTag,
+		PriceTag:   stockItemPrice.PriceTag,
 		UOM:        stockItemPrice.UOM,
 		Qty:        stockItemPrice.Qty,
 		StockValue: stockItemPrice.StockValue,

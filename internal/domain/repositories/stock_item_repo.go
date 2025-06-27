@@ -5,6 +5,6 @@ import (
 )
 
 type StockItemRepository interface {
-	GetAllStockItems(limit int, offset int) ([]entities.STItem, error)
+	GetAllStockItems(filter map[string]any) ([]entities.STItem, error)
 	GetStockItemByCode(code string) (*entities.STItem, error)
 }

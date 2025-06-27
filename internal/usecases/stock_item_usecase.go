@@ -13,8 +13,8 @@ func NewStockItemUseCase(repo repositories.StockItemRepository) *StockItemUseCas
 	return &StockItemUseCase{repo: repo}
 }
 
-func (u StockItemUseCase) GetAllStockItems(limit int, offset int) ([]entities.STItem, error) {
-	return u.repo.GetAllStockItems(limit, offset)
+func (u StockItemUseCase) GetAllStockItems(filter map[string]any) ([]entities.STItem, error) {
+	return u.repo.GetAllStockItems(filter)
 }
 
 func (u StockItemUseCase) GetStockItemByCode(code string) (*entities.STItem, error) {
