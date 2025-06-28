@@ -48,7 +48,7 @@ func (r *StockItemRepositoryImpl) GetAllStockItems(filter map[string]any) ([]ent
 	semaphore := make(chan bool, 5)
 	for _, chunk := range chunked {
 		wg.Add(1)
-		go func() {
+		go func(chunk []string) {
 			defer wg.Done()
 			semaphore <- true
 			defer func() { <-semaphore }()
@@ -62,7 +62,7 @@ func (r *StockItemRepositoryImpl) GetAllStockItems(filter map[string]any) ([]ent
 				val, _ := priceMap.LoadOrStore(stockItemPrice.Code, []entities.STItemPrice{})
 				priceMap.Store(stockItemPrice.Code, append(val.([]entities.STItemPrice), stockItemPrice))
 			}
-		}()
+		}(chunk)
 	}
 
 	wg.Wait()

@@ -8,7 +8,9 @@ import (
 )
 
 func NewConnection(config *config.Config) (*gorm.DB, error) {
-	db, err := gorm.Open(firebird.Open(config.DBString), &gorm.Config{})
+	db, err := gorm.Open(firebird.Open(config.DBString), &gorm.Config{
+		PrepareStmt: true,
+	})
 	return db, err
 }
 
