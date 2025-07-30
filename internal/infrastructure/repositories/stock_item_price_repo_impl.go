@@ -28,7 +28,7 @@ func (r *StockItemPriceRepositoryImpl) GetStockItemPriceByDTLKey(code string, dt
 	return &stockItemPrice, err
 }
 
-func (r *StockItemPriceRepositoryImpl) CreateStockItemPrice(code string, stockItemPrice *entities.STItemPrice) error {
+func (r *StockItemPriceRepositoryImpl) CreateStockItemPrice(stockItemPrice *entities.STItemPrice) error {
 	// var lastId int
 	// err := r.db.Model(&entities.STItemPrice{}).Select("MAX(dtlkey)").Scan(&lastId).Error
 	// if err != nil {
@@ -48,18 +48,18 @@ func (r *StockItemPriceRepositoryImpl) CreateStockItemPrice(code string, stockIt
 	} else {
 		stockItemPrice.DtlKey = lastId - 1
 	}
-	var maxSeq int
-	err = tx.Model(&entities.STItemPrice{}).Select("MAX(seq)").Where("code = ?", code).Scan(&maxSeq).Error
-	if err != nil {
+	// var maxSeq int
+	// err = tx.Model(&entities.STItemPrice{}).Select("MAX(seq)").Where("code = ?", stockItemPrice.Code).Scan(&maxSeq).Error
+	// if err != nil {
+	// 	tx.Rollback()
+	// 	return err
+	// }
+	// stockItemPrice.Seq = maxSeq + 1000
+	if err := tx.Where("code = ?", stockItemPrice.Code).Create(stockItemPrice).Error; err != nil {
 		tx.Rollback()
 		return err
 	}
-	stockItemPrice.Seq = maxSeq + 1000
-	if err := tx.Where("code = ?", code).Create(stockItemPrice).Error; err != nil {
-		tx.Rollback()
-		return err
-	}
-	if err := tx.Model(&entities.STItem{}).Where("code = ?", code).Update("LASTMODIFIED", time.Now().Unix()).Error; err != nil {
+	if err := tx.Model(&entities.STItem{}).Where("code = ?", stockItemPrice.Code).Update("LASTMODIFIED", time.Now().Unix()).Error; err != nil {
 		tx.Rollback()
 		return err
 	}
@@ -68,4 +68,15 @@ func (r *StockItemPriceRepositoryImpl) CreateStockItemPrice(code string, stockIt
 
 func (r *StockItemPriceRepositoryImpl) UpdateStockItemPrice(code string, stockItemPrice *entities.STItemPrice) error {
 	return r.db.Where("code = ?", code).Save(stockItemPrice).Error
+}
+
+func (r *StockItemPriceRepositoryImpl) BulkUpdateStockItemPrice(code string, stockItemPrices []entities.STItemPrice) error {
+	tx := r.db.Begin()
+	for _, stockItemPrice := range stockItemPrices {
+		if err := tx.Where("code = ? AND dtlkey = ?", code, stockItemPrice.DtlKey).Updates(stockItemPrice).Error; err != nil {
+			tx.Rollback()
+			return err
+		}
+	}
+	return tx.Commit().Error
 }

@@ -21,8 +21,8 @@ func (u StockItemPriceUseCase) GetStockItemPriceByDTLKey(code string, dtlKey int
 	return u.repo.GetStockItemPriceByDTLKey(code, dtlKey)
 }
 
-func (u StockItemPriceUseCase) CreateStockItemPrice(code string, stockItemPrice *entities.STItemPrice) error {
-	return u.repo.CreateStockItemPrice(code, stockItemPrice)
+func (u StockItemPriceUseCase) CreateStockItemPrice(stockItemPrice *entities.STItemPrice) error {
+	return u.repo.CreateStockItemPrice(stockItemPrice)
 }
 
 func (u StockItemPriceUseCase) UpdateStockItemPrice(code string, stockItemPrice *entities.STItemPrice) error {

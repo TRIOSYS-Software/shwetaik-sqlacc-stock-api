@@ -86,7 +86,7 @@ func (s *StockItemPriceHandler) CreateStockItemPrice(c *fiber.Ctx) error {
 		StockValue: stockItemPriceDTO.StockValue,
 		TagType:    "C",
 	}
-	if err := s.usecase.CreateStockItemPrice(code, &stockItemPrice); err != nil {
+	if err := s.usecase.CreateStockItemPrice(&stockItemPrice); err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, err.Error())
 	}
 	response := dto.StockItemPriceResponse{
