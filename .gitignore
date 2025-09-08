@@ -5,3 +5,4 @@ tmp/
 go.sum
 *.test
 .vscode/
+.DS_Store
