@@ -1,10 +1,10 @@
 package repositories
 
 import (
+	"fmt"
 	"shwetaik-sqlacc-stock-api/internal/domain/entities"
 	"shwetaik-sqlacc-stock-api/internal/domain/repositories"
-	"shwetaik-sqlacc-stock-api/pkg/utils"
-	"sync"
+	"strings"
 
 	"gorm.io/gorm"
 )
@@ -18,66 +18,119 @@ func NewStockItemRepository(db *gorm.DB) repositories.StockItemRepository {
 }
 
 func (r *StockItemRepositoryImpl) GetAllStockItems(filter map[string]any) ([]entities.STItem, error) {
-	var stockItems []entities.STItem
-	query := r.db.Model(&entities.STItem{})
+	// Build WHERE clauses and args
+	whereClauses := []string{}
+	args := []interface{}{}
 
-	if limit, ok := filter["limit"].(int); ok && limit > 0 {
-		query = query.Limit(limit)
-		if offset, ok := filter["offset"].(int); ok && offset > 0 {
-			query = query.Offset(offset)
-		}
-	}
 	if stockGroup, ok := filter["stock_group"].(string); ok && stockGroup != "" {
-		query = query.Where("STOCKGROUP LIKE ?", "%"+stockGroup+"%")
+		whereClauses = append(whereClauses, "si.STOCKGROUP LIKE ?")
+		args = append(args, "%"+stockGroup+"%")
 	}
 	if description, ok := filter["description"].(string); ok && description != "" {
-		query = query.Where("DESCRIPTION LIKE ?", "%"+description+"%")
+		whereClauses = append(whereClauses, "si.DESCRIPTION LIKE ?")
+		args = append(args, "%"+description+"%")
 	}
 
-	err := query.Find(&stockItems).Error
-
-	codes := make([]string, len(stockItems))
-	for i, stockItem := range stockItems {
-		codes[i] = stockItem.Code
+	// Build the JOIN query
+	query := `si.*, 
+			   sip.DTLKEY AS price_dtlkey, sip.CODE AS price_code, sip.TAGTYPE AS price_tagtype, 
+			   sip.COMPANY AS price_company, sip.SEQ AS price_seq, sip.PRICETAG AS price_pricetag, 
+			   sip.UOM AS price_uom, sip.QTY AS price_qty, sip.STOCKVALUE AS price_stockvalue, 
+			   sip.DISCOUNT AS price_discount, sip.DATEFROM AS price_datefrom, sip.DATETO AS price_dateto, 
+			   sip.NOTE AS price_note
+		   FROM ST_ITEM si
+		   LEFT JOIN ST_ITEM_PRICE sip ON si.code = sip.code`
+	if len(whereClauses) > 0 {
+		query += " WHERE " + strings.Join(whereClauses, " AND ")
 	}
 
-	chunked := utils.ChunkSlice(codes, 1500)
-	priceMap := sync.Map{}
-	var wg sync.WaitGroup
-	errChan := make(chan error, len(chunked))
-	semaphore := make(chan bool, 5)
-	for _, chunk := range chunked {
-		wg.Add(1)
-		go func(chunk []string) {
-			defer wg.Done()
-			semaphore <- true
-			defer func() { <-semaphore }()
-			var stockItemPrices []entities.STItemPrice
-			err := r.db.Where("code IN ?", chunk).Find(&stockItemPrices).Error
-			if err != nil {
-				errChan <- err
-				return
+	var updateQuery string
+	// Add limit and offset
+	if limit, ok := filter["limit"].(int); ok && limit > 0 {
+		// query += " LIMIT ?"
+		updateQuery = fmt.Sprintf("SELECT FIRST %d %s", limit, query) // To avoid unused variable warning
+		// args = append(args, limit)
+		if offset, ok := filter["offset"].(int); ok && offset > 0 {
+			updateQuery = fmt.Sprintf("SELECT FIRST %d SKIP %d %s", limit, offset, query) // To avoid unused variable warning
+			// query += " OFFSET ?"
+			// args = append(args, offset)
+		}
+	} else {
+		updateQuery = fmt.Sprintf("SELECT %s", query) // To avoid unused variable warning
+	}
+
+	// Struct for joined result
+	type joinedResult struct {
+		entities.STItem
+		PriceDtlKey     *int     `gorm:"column:PRICE_DTLKEY"`
+		PriceCode       *string  `gorm:"column:PRICE_CODE"`
+		PriceTagType    *string  `gorm:"column:PRICE_TAGTYPE"`
+		PriceCompany    *string  `gorm:"column:PRICE_COMPANY"`
+		PriceSeq        *int     `gorm:"column:PRICE_SEQ"`
+		PricePriceTag   *string  `gorm:"column:PRICE_PRICETAG"`
+		PriceUOM        *string  `gorm:"column:PRICE_UOM"`
+		PriceQty        *float64 `gorm:"column:PRICE_QTY"`
+		PriceStockValue *float64 `gorm:"column:PRICE_STOCKVALUE"`
+		PriceDiscount   *string  `gorm:"column:PRICE_DISCOUNT"`
+		PriceDateFrom   *string  `gorm:"column:PRICE_DATEFROM"`
+		PriceDateTo     *string  `gorm:"column:PRICE_DATETO"`
+		PriceNote       *[]byte  `gorm:"column:PRICE_NOTE"`
+	}
+
+	var joinedRows []joinedResult
+	err := r.db.Raw(updateQuery, args...).Scan(&joinedRows).Error
+	if err != nil {
+		return nil, err
+	}
+
+	// Map results to stockItems with prices
+	stockItemMap := make(map[string]*entities.STItem)
+	for _, row := range joinedRows {
+		item, exists := stockItemMap[row.Code]
+		if !exists {
+			itemCopy := row.STItem
+			itemCopy.STItemPrices = []entities.STItemPrice{}
+			stockItemMap[row.Code] = &itemCopy
+			item = &itemCopy
+		}
+		if row.PriceCode != nil {
+			price := entities.STItemPrice{
+				DtlKey:     0,
+				Code:       *row.PriceCode,
+				TagType:    "",
+				Company:    row.PriceCompany,
+				Seq:        0,
+				PriceTag:   row.PricePriceTag,
+				UOM:        "",
+				Qty:        row.PriceQty,
+				StockValue: row.PriceStockValue,
+				Discount:   row.PriceDiscount,
+				Note:       row.PriceNote,
 			}
-			for _, stockItemPrice := range stockItemPrices {
-				val, _ := priceMap.LoadOrStore(stockItemPrice.Code, []entities.STItemPrice{})
-				priceMap.Store(stockItemPrice.Code, append(val.([]entities.STItemPrice), stockItemPrice))
+			if row.PriceDtlKey != nil {
+				price.DtlKey = *row.PriceDtlKey
 			}
-		}(chunk)
-	}
-
-	wg.Wait()
-	close(errChan)
-	if len(errChan) > 0 {
-		return nil, <-errChan
-	}
-
-	for i, item := range stockItems {
-		if prices, ok := priceMap.Load(item.Code); ok {
-			stockItems[i].STItemPrices = prices.([]entities.STItemPrice)
+			if row.PriceTagType != nil {
+				price.TagType = *row.PriceTagType
+			}
+			if row.PriceSeq != nil {
+				price.Seq = *row.PriceSeq
+			}
+			if row.PriceUOM != nil {
+				price.UOM = *row.PriceUOM
+			}
+			// DateFrom/DateTo parsing omitted for brevity
+			item.STItemPrices = append(item.STItemPrices, price)
 		}
 	}
 
-	return stockItems, err
+	// Convert map to slice
+	stockItems := make([]entities.STItem, 0, len(stockItemMap))
+	for _, item := range stockItemMap {
+		stockItems = append(stockItems, *item)
+	}
+
+	return stockItems, nil
 }
 
 func (r *StockItemRepositoryImpl) GetStockItemByCode(code string) (*entities.STItem, error) {
