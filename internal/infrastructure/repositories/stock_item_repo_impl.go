@@ -32,32 +32,38 @@ func (r *StockItemRepositoryImpl) GetAllStockItems(filter map[string]any) ([]ent
 	}
 
 	// Build the JOIN query
-	query := `si.*, 
-			   sip.DTLKEY AS price_dtlkey, sip.CODE AS price_code, sip.TAGTYPE AS price_tagtype, 
-			   sip.COMPANY AS price_company, sip.SEQ AS price_seq, sip.PRICETAG AS price_pricetag, 
-			   sip.UOM AS price_uom, sip.QTY AS price_qty, sip.STOCKVALUE AS price_stockvalue, 
-			   sip.DISCOUNT AS price_discount, sip.DATEFROM AS price_datefrom, sip.DATETO AS price_dateto, 
+	baseQuery := `
+		SELECT si.*,
+			   sip.DTLKEY AS price_dtlkey, sip.CODE AS price_code, sip.TAGTYPE AS price_tagtype,
+			   sip.COMPANY AS price_company, sip.SEQ AS price_seq, sip.PRICETAG AS price_pricetag,
+			   sip.UOM AS price_uom, sip.QTY AS price_qty, sip.STOCKVALUE AS price_stockvalue,
+			   sip.DISCOUNT AS price_discount, sip.DATEFROM AS price_datefrom, sip.DATETO AS price_dateto,
 			   sip.NOTE AS price_note
-		   FROM ST_ITEM si
-		   LEFT JOIN ST_ITEM_PRICE sip ON si.code = sip.code`
+		FROM (
+			SELECT si.*
+			FROM ST_ITEM si
+			%s
+			ORDER BY si.CODE
+			%s
+		) si
+		LEFT JOIN ST_ITEM_PRICE sip ON si.code = sip.code
+	`
+
+	whereSQL := ""
 	if len(whereClauses) > 0 {
-		query += " WHERE " + strings.Join(whereClauses, " AND ")
+		whereSQL = " WHERE " + strings.Join(whereClauses, " AND ")
 	}
 
-	var updateQuery string
-	// Add limit and offset
+	paginationSQL := ""
 	if limit, ok := filter["limit"].(int); ok && limit > 0 {
-		// query += " LIMIT ?"
-		updateQuery = fmt.Sprintf("SELECT FIRST %d %s", limit, query) // To avoid unused variable warning
-		// args = append(args, limit)
 		if offset, ok := filter["offset"].(int); ok && offset > 0 {
-			updateQuery = fmt.Sprintf("SELECT FIRST %d SKIP %d %s", limit, offset, query) // To avoid unused variable warning
-			// query += " OFFSET ?"
-			// args = append(args, offset)
+			paginationSQL = fmt.Sprintf("ROWS %d TO %d", offset+1, offset+limit)
+		} else {
+			paginationSQL = fmt.Sprintf("ROWS %d", limit)
 		}
-	} else {
-		updateQuery = fmt.Sprintf("SELECT %s", query) // To avoid unused variable warning
 	}
+
+	updateQuery := fmt.Sprintf(baseQuery, whereSQL, paginationSQL)
 
 	// Struct for joined result
 	type joinedResult struct {
