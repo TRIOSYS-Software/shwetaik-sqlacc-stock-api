@@ -29,13 +29,6 @@ func (r *StockItemPriceRepositoryImpl) GetStockItemPriceByDTLKey(code string, dt
 }
 
 func (r *StockItemPriceRepositoryImpl) CreateStockItemPrice(stockItemPrice *entities.STItemPrice) error {
-	// var lastId int
-	// err := r.db.Model(&entities.STItemPrice{}).Select("MAX(dtlkey)").Scan(&lastId).Error
-	// if err != nil {
-	// 	return err
-	// }
-	// stockItemPrice.DtlKey = lastId + 1
-	// return r.db.Where("code = ?", code).Create(stockItemPrice).Error
 	tx := r.db.Begin()
 	var lastId int
 	err := tx.Model(&entities.STItemPrice{}).Select("MIN(dtlkey)").Scan(&lastId).Error
@@ -48,13 +41,7 @@ func (r *StockItemPriceRepositoryImpl) CreateStockItemPrice(stockItemPrice *enti
 	} else {
 		stockItemPrice.DtlKey = lastId - 1
 	}
-	// var maxSeq int
-	// err = tx.Model(&entities.STItemPrice{}).Select("MAX(seq)").Where("code = ?", stockItemPrice.Code).Scan(&maxSeq).Error
-	// if err != nil {
-	// 	tx.Rollback()
-	// 	return err
-	// }
-	// stockItemPrice.Seq = maxSeq + 1000
+
 	if err := tx.Where("code = ?", stockItemPrice.Code).Create(stockItemPrice).Error; err != nil {
 		tx.Rollback()
 		return err

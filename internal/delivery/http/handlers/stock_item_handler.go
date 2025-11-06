@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"net/url"
-	"shwetaik-sqlacc-stock-api/internal/delivery/dto"
 	"shwetaik-sqlacc-stock-api/internal/usecases"
 	"shwetaik-sqlacc-stock-api/pkg/utils"
 
@@ -24,31 +23,9 @@ func (s *StockItemHandler) GetAllStockItems(c *fiber.Ctx) error {
 	filter["stock_group"] = c.Query("stock_group", "")
 	filter["description"] = c.Query("description", "")
 
-	stockItems, err := s.usecase.GetAllStockItems(filter)
+	response, err := s.usecase.GetAllStockItems(filter)
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, err.Error())
-	}
-	var response []dto.StockItemResponse
-
-	for _, stockItem := range stockItems {
-		var stockItemPricesDTO []dto.StockItemPriceResponse
-		for _, stockItemPrice := range stockItem.STItemPrices {
-			stockItemPricesDTO = append(stockItemPricesDTO, dto.StockItemPriceResponse{
-				DtlKey:     stockItemPrice.DtlKey,
-				Code:       stockItemPrice.Code,
-				PriceTag:   stockItemPrice.PriceTag,
-				UOM:        stockItemPrice.UOM,
-				Qty:        stockItemPrice.Qty,
-				StockValue: stockItemPrice.StockValue,
-			})
-		}
-		response = append(response, dto.StockItemResponse{
-			DocKey:       stockItem.DocKey,
-			Code:         stockItem.Code,
-			Description:  *stockItem.Description,
-			StockGroup:   stockItem.StockGroup,
-			STItemPrices: stockItemPricesDTO,
-		})
 	}
 	return utils.SuccessResponse(c, "success", response)
 }
@@ -59,27 +36,9 @@ func (s *StockItemHandler) GetStockItemByCode(c *fiber.Ctx) error {
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, err.Error())
 	}
-	stockItem, err := s.usecase.GetStockItemByCode(code)
+	response, err := s.usecase.GetStockItemByCode(code)
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, err.Error())
-	}
-	var stockItemPriceDTO []dto.StockItemPriceResponse
-	for _, stockItemPrice := range stockItem.STItemPrices {
-		stockItemPriceDTO = append(stockItemPriceDTO, dto.StockItemPriceResponse{
-			DtlKey:     stockItemPrice.DtlKey,
-			Code:       stockItemPrice.Code,
-			PriceTag:   stockItemPrice.PriceTag,
-			UOM:        stockItemPrice.UOM,
-			Qty:        stockItemPrice.Qty,
-			StockValue: stockItemPrice.StockValue,
-		})
-	}
-	response := dto.StockItemResponse{
-		DocKey:       stockItem.DocKey,
-		Code:         stockItem.Code,
-		Description:  *stockItem.Description,
-		StockGroup:   stockItem.StockGroup,
-		STItemPrices: stockItemPriceDTO,
 	}
 	return utils.SuccessResponse(c, "success", response)
 }

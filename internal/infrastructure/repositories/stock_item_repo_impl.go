@@ -38,7 +38,8 @@ func (r *StockItemRepositoryImpl) GetAllStockItems(filter map[string]any) ([]ent
 			   sip.COMPANY AS price_company, sip.SEQ AS price_seq, sip.PRICETAG AS price_pricetag,
 			   sip.UOM AS price_uom, sip.QTY AS price_qty, sip.STOCKVALUE AS price_stockvalue,
 			   sip.DISCOUNT AS price_discount, sip.DATEFROM AS price_datefrom, sip.DATETO AS price_dateto,
-			   sip.NOTE AS price_note
+			   sip.NOTE AS price_note, sib.AUTOKEY AS barcode_autokey, sib.BARCODE AS barcode,
+			   sib.UOM AS barcode_uom 
 		FROM (
 			SELECT si.*
 			FROM ST_ITEM si
@@ -47,6 +48,7 @@ func (r *StockItemRepositoryImpl) GetAllStockItems(filter map[string]any) ([]ent
 			%s
 		) si
 		LEFT JOIN ST_ITEM_PRICE sip ON si.code = sip.code
+		LEFT JOIN ST_ITEM_BARCODE sib ON si.code = sib.code
 	`
 
 	whereSQL := ""
@@ -81,6 +83,9 @@ func (r *StockItemRepositoryImpl) GetAllStockItems(filter map[string]any) ([]ent
 		PriceDateFrom   *string  `gorm:"column:PRICE_DATEFROM"`
 		PriceDateTo     *string  `gorm:"column:PRICE_DATETO"`
 		PriceNote       *[]byte  `gorm:"column:PRICE_NOTE"`
+		BarcodeAutoKey  *int     `gorm:"column:BARCODE_AUTOKEY"`
+		Barcode         *string  `gorm:"column:BARCODE"`
+		BarcodeUOM      *string  `gorm:"column:BARCODE_UOM"`
 	}
 
 	var joinedRows []joinedResult
@@ -128,6 +133,20 @@ func (r *StockItemRepositoryImpl) GetAllStockItems(filter map[string]any) ([]ent
 			// DateFrom/DateTo parsing omitted for brevity
 			item.STItemPrices = append(item.STItemPrices, price)
 		}
+		// Barcode handling can be added similarly if needed
+		if row.BarcodeAutoKey != nil {
+			barcode := entities.STItemBarcode{
+				AutoKey: *row.BarcodeAutoKey,
+				Code:    row.Code,
+			}
+			if row.Barcode != nil {
+				barcode.Barcode = *row.Barcode
+			}
+			if row.BarcodeUOM != nil {
+				barcode.UOM = *row.BarcodeUOM
+			}
+			item.STItemBarcodes = append(item.STItemBarcodes, barcode)
+		}
 	}
 
 	// Convert map to slice
@@ -141,6 +160,6 @@ func (r *StockItemRepositoryImpl) GetAllStockItems(filter map[string]any) ([]ent
 
 func (r *StockItemRepositoryImpl) GetStockItemByCode(code string) (*entities.STItem, error) {
 	var stockItem entities.STItem
-	err := r.db.Where("code = ?", code).Preload("STItemPrices").First(&stockItem).Error
+	err := r.db.Where("code = ?", code).Preload("STItemPrices").Preload("STItemBarcodes").First(&stockItem).Error
 	return &stockItem, err
 }

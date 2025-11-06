@@ -9,6 +9,12 @@ type StockItemPriceResponse struct {
 	StockValue *float64 `json:"stock_value"`
 }
 
+type StockItemBarcodeResponse struct {
+	AutoKey int    `json:"autokey"`
+	Barcode string `json:"barcode"`
+	UOM     string `json:"uom"`
+}
+
 type StockItemPriceRequest struct {
 	// Code       string   `json:"code"`
 	PriceTag   string   `json:"price_tag"`
