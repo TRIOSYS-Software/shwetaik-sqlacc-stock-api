@@ -3,7 +3,6 @@ package handlers
 import (
 	"net/url"
 	"shwetaik-sqlacc-stock-api/internal/delivery/dto"
-	"shwetaik-sqlacc-stock-api/internal/domain/entities"
 	"shwetaik-sqlacc-stock-api/internal/usecases"
 	"shwetaik-sqlacc-stock-api/pkg/utils"
 
@@ -24,21 +23,9 @@ func (s *StockItemPriceHandler) GetStockItemPricesByCode(c *fiber.Ctx) error {
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, err.Error())
 	}
-	stockItemPrices, err := s.usecase.GetStockItemPricesByCode(code)
+	response, err := s.usecase.GetStockItemPricesByCode(code)
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, err.Error())
-	}
-	var response []dto.StockItemPriceResponse
-
-	for _, stockItemPrice := range stockItemPrices {
-		response = append(response, dto.StockItemPriceResponse{
-			DtlKey:     stockItemPrice.DtlKey,
-			Code:       stockItemPrice.Code,
-			PriceTag:   stockItemPrice.PriceTag,
-			UOM:        stockItemPrice.UOM,
-			Qty:        stockItemPrice.Qty,
-			StockValue: stockItemPrice.StockValue,
-		})
 	}
 	return utils.SuccessResponse(c, "success", response)
 }
@@ -53,17 +40,9 @@ func (s *StockItemPriceHandler) GetStockItemPriceByDTLKey(c *fiber.Ctx) error {
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, err.Error())
 	}
-	stockItemPrice, err := s.usecase.GetStockItemPriceByDTLKey(code, dtlKey)
+	response, err := s.usecase.GetStockItemPriceByDTLKey(code, dtlKey)
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, err.Error())
-	}
-	response := dto.StockItemPriceResponse{
-		DtlKey:     stockItemPrice.DtlKey,
-		Code:       stockItemPrice.Code,
-		PriceTag:   stockItemPrice.PriceTag,
-		UOM:        stockItemPrice.UOM,
-		Qty:        stockItemPrice.Qty,
-		StockValue: stockItemPrice.StockValue,
 	}
 	return utils.SuccessResponse(c, "success", response)
 }
@@ -78,24 +57,9 @@ func (s *StockItemPriceHandler) CreateStockItemPrice(c *fiber.Ctx) error {
 	if err := c.BodyParser(&stockItemPriceDTO); err != nil {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, err.Error())
 	}
-	var stockItemPrice entities.STItemPrice = entities.STItemPrice{
-		Code:       code,
-		PriceTag:   &stockItemPriceDTO.PriceTag,
-		UOM:        stockItemPriceDTO.UOM,
-		Qty:        stockItemPriceDTO.Qty,
-		StockValue: stockItemPriceDTO.StockValue,
-		TagType:    "C",
-	}
-	if err := s.usecase.CreateStockItemPrice(&stockItemPrice); err != nil {
+	response, err := s.usecase.CreateStockItemPrice(code, stockItemPriceDTO)
+	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, err.Error())
-	}
-	response := dto.StockItemPriceResponse{
-		DtlKey:     stockItemPrice.DtlKey,
-		Code:       stockItemPrice.Code,
-		PriceTag:   stockItemPrice.PriceTag,
-		UOM:        stockItemPrice.UOM,
-		Qty:        stockItemPrice.Qty,
-		StockValue: stockItemPrice.StockValue,
 	}
 	return utils.SuccessResponse(c, "success", response)
 }
@@ -115,25 +79,9 @@ func (s *StockItemPriceHandler) UpdateStockItemPrice(c *fiber.Ctx) error {
 	if err := c.BodyParser(&stockItemPriceDTO); err != nil {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, err.Error())
 	}
-	var stockItemPrice entities.STItemPrice = entities.STItemPrice{
-		DtlKey:     dtlKey,
-		Code:       code,
-		PriceTag:   &stockItemPriceDTO.PriceTag,
-		UOM:        stockItemPriceDTO.UOM,
-		Qty:        stockItemPriceDTO.Qty,
-		StockValue: stockItemPriceDTO.StockValue,
-		TagType:    "C",
-	}
-	if err := s.usecase.UpdateStockItemPrice(code, &stockItemPrice); err != nil {
+	response, err := s.usecase.UpdateStockItemPrice(code, dtlKey, &stockItemPriceDTO)
+	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, err.Error())
-	}
-	response := dto.StockItemPriceResponse{
-		DtlKey:     stockItemPrice.DtlKey,
-		Code:       stockItemPrice.Code,
-		PriceTag:   stockItemPrice.PriceTag,
-		UOM:        stockItemPrice.UOM,
-		Qty:        stockItemPrice.Qty,
-		StockValue: stockItemPrice.StockValue,
 	}
 	return utils.SuccessResponse(c, "success", response)
 }
