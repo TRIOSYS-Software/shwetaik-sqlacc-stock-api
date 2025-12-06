@@ -1,17 +1,15 @@
 package routes
 
 import (
+	"shwetaik-sqlacc-stock-api/internal/delivery/http/container"
 	"shwetaik-sqlacc-stock-api/internal/delivery/http/handlers"
 	"shwetaik-sqlacc-stock-api/internal/delivery/http/middleware"
-	"shwetaik-sqlacc-stock-api/internal/infrastructure/repositories"
-	"shwetaik-sqlacc-stock-api/internal/usecases"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
-	"gorm.io/gorm"
 )
 
-func SetupRoutes(app *fiber.App, db *gorm.DB) {
+func SetupRoutes(app *fiber.App, container *container.AppContainer) {
 
 	app.Use(cors.New(cors.Config{
 		AllowOrigins: "*",
@@ -20,13 +18,20 @@ func SetupRoutes(app *fiber.App, db *gorm.DB) {
 	api := app.Group("/api/v1")
 
 	api.Use(middleware.AuthMiddleware)
-	initStockItemRoutes(api, db)
+	initStockItemRoutes(api, container.StockItemHandler)
+	initStockItemPriceRoutes(api, container.StockItemPriceHandler)
 }
 
-func initStockItemRoutes(api fiber.Router, db *gorm.DB) {
-	stockItemRepo := repositories.NewStockItemRepository(db)
-	stockItemUsecase := usecases.NewStockItemUseCase(stockItemRepo)
-	stockItemHandler := handlers.NewStockItemHandler(stockItemUsecase)
+func initStockItemRoutes(api fiber.Router, handler *handlers.StockItemHandler) {
 
-	api.Get("/stock-items", stockItemHandler.GetAllStockItems)
+	api.Get("/stock-items", handler.GetAllStockItems)
+	api.Get("/stock-items/:code", handler.GetStockItemByCode)
+}
+
+func initStockItemPriceRoutes(api fiber.Router, handler *handlers.StockItemPriceHandler) {
+
+	api.Get("/stock-items/:code/prices", handler.GetStockItemPricesByCode)
+	api.Get("/stock-items/:code/prices/:dtlKey", handler.GetStockItemPriceByDTLKey)
+	api.Post("/stock-items/:code/prices", handler.CreateStockItemPrice)
+	api.Put("/stock-items/:code/prices/:dtlKey", handler.UpdateStockItemPrice)
 }

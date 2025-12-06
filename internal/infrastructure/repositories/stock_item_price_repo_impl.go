@@ -1,0 +1,69 @@
+package repositories
+
+import (
+	"shwetaik-sqlacc-stock-api/internal/domain/entities"
+	"shwetaik-sqlacc-stock-api/internal/domain/repositories"
+	"time"
+
+	"gorm.io/gorm"
+)
+
+type StockItemPriceRepositoryImpl struct {
+	db *gorm.DB
+}
+
+func NewStockItemPriceRepository(db *gorm.DB) repositories.StockItemPriceRepository {
+	return &StockItemPriceRepositoryImpl{db: db}
+}
+
+func (r *StockItemPriceRepositoryImpl) GetStockItemPricesByCode(code string) ([]entities.STItemPrice, error) {
+	var stockItemPrices []entities.STItemPrice
+	err := r.db.Where("code = ?", code).Find(&stockItemPrices).Error
+	return stockItemPrices, err
+}
+
+func (r *StockItemPriceRepositoryImpl) GetStockItemPriceByDTLKey(code string, dtlKey int) (*entities.STItemPrice, error) {
+	var stockItemPrice entities.STItemPrice
+	err := r.db.Where("code = ?", code).Where("dtlkey = ?", dtlKey).First(&stockItemPrice).Error
+	return &stockItemPrice, err
+}
+
+func (r *StockItemPriceRepositoryImpl) CreateStockItemPrice(stockItemPrice *entities.STItemPrice) error {
+	tx := r.db.Begin()
+	var lastId int
+	err := tx.Model(&entities.STItemPrice{}).Select("MIN(dtlkey)").Scan(&lastId).Error
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+	if lastId > 0 {
+		stockItemPrice.DtlKey = -1
+	} else {
+		stockItemPrice.DtlKey = lastId - 1
+	}
+
+	if err := tx.Where("code = ?", stockItemPrice.Code).Create(stockItemPrice).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+	if err := tx.Model(&entities.STItem{}).Where("code = ?", stockItemPrice.Code).Update("LASTMODIFIED", time.Now().Unix()).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+	return tx.Commit().Error
+}
+
+func (r *StockItemPriceRepositoryImpl) UpdateStockItemPrice(code string, stockItemPrice *entities.STItemPrice) error {
+	return r.db.Where("code = ?", code).Save(stockItemPrice).Error
+}
+
+func (r *StockItemPriceRepositoryImpl) BulkUpdateStockItemPrice(code string, stockItemPrices []entities.STItemPrice) error {
+	tx := r.db.Begin()
+	for _, stockItemPrice := range stockItemPrices {
+		if err := tx.Where("code = ? AND dtlkey = ?", code, stockItemPrice.DtlKey).Updates(stockItemPrice).Error; err != nil {
+			tx.Rollback()
+			return err
+		}
+	}
+	return tx.Commit().Error
+}
