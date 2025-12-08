@@ -19,7 +19,7 @@ func NewConnection(config *config.Config) (*gorm.DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	sqlDB.SetMaxOpenConns(20)                  // max connections to Firebird
+	sqlDB.SetMaxOpenConns(5)                   // max connections to Firebird
 	sqlDB.SetMaxIdleConns(5)                   // keep some idle for reuse
 	sqlDB.SetConnMaxLifetime(30 * time.Minute) // recycle connections before Firebird kills them
 	sqlDB.SetConnMaxIdleTime(5 * time.Minute)  // close idle connections
