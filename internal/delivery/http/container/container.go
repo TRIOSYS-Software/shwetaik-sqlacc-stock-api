@@ -1,8 +1,10 @@
 package container
 
 import (
+	"shwetaik-sqlacc-stock-api/internal/config"
 	"shwetaik-sqlacc-stock-api/internal/delivery/http/handlers"
 	"shwetaik-sqlacc-stock-api/internal/infrastructure/repositories"
+	"shwetaik-sqlacc-stock-api/internal/infrastructure/sqlaccountapi"
 
 	"shwetaik-sqlacc-stock-api/internal/usecases"
 
@@ -15,9 +17,10 @@ type AppContainer struct {
 	GLAccHandler          *handlers.GLAccHandler
 	PaymentMethodHandler  *handlers.PaymentMethodHandler
 	ProjectHandler        *handlers.ProjectHandler
+	PaymentVoucherHandler *handlers.PaymentVoucherHandler
 }
 
-func NewAppContainer(db *gorm.DB) *AppContainer {
+func NewAppContainer(db *gorm.DB, cfg *config.Config) *AppContainer {
 	stockItemRepo := repositories.NewStockItemRepository(db)
 	stockItemUsecase := usecases.NewStockItemUseCase(stockItemRepo)
 	stockItemHandler := handlers.NewStockItemHandler(stockItemUsecase)
@@ -38,11 +41,16 @@ func NewAppContainer(db *gorm.DB) *AppContainer {
 	projectUsecase := usecases.NewProjectUseCase(projectRepo)
 	projectHandler := handlers.NewProjectHandler(projectUsecase)
 
+	paymentVoucherGateway := sqlaccountapi.NewClient(cfg)
+	paymentVoucherUsecase := usecases.NewPaymentVoucherUseCase(paymentVoucherGateway)
+	paymentVoucherHandler := handlers.NewPaymentVoucherHandler(paymentVoucherUsecase)
+
 	return &AppContainer{
 		StockItemHandler:      stockItemHandler,
 		StockItemPriceHandler: stockItemPriceHandler,
 		GLAccHandler:          glAccHandler,
 		PaymentMethodHandler:  paymentMethodHandler,
 		ProjectHandler:        projectHandler,
+		PaymentVoucherHandler: paymentVoucherHandler,
 	}
 }

@@ -23,6 +23,7 @@ func SetupRoutes(app *fiber.App, container *container.AppContainer) {
 	initGLAccRoutes(api, container.GLAccHandler)
 	initPaymentMethodRoutes(api, container.PaymentMethodHandler)
 	initProjectRoutes(api, container.ProjectHandler)
+	initPaymentVoucherRoutes(api, container.PaymentVoucherHandler)
 }
 
 func initStockItemRoutes(api fiber.Router, handler *handlers.StockItemHandler) {
@@ -54,4 +55,9 @@ func initProjectRoutes(api fiber.Router, handler *handlers.ProjectHandler) {
 
 	api.Get("/projects", handler.GetAllProjects)
 	api.Get("/projects/:code", handler.GetProjectByCode)
+}
+
+func initPaymentVoucherRoutes(api fiber.Router, handler *handlers.PaymentVoucherHandler) {
+
+	api.Post("/payment-vouchers", handler.CreatePaymentVoucher)
 }
