@@ -8,6 +8,9 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
+const defaultStockItemsLimit = 100
+const maxStockItemsLimit = 1000
+
 type StockItemHandler struct {
 	usecase *usecases.StockItemUseCase
 }
@@ -17,9 +20,14 @@ func NewStockItemHandler(usecase *usecases.StockItemUseCase) *StockItemHandler {
 }
 
 func (s *StockItemHandler) GetAllStockItems(c *fiber.Ctx) error {
+	limit := c.QueryInt("limit", defaultStockItemsLimit)
+	if limit > maxStockItemsLimit {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "limit exceeds maximum allowed value")
+	}
+
 	filter := make(map[string]any)
-	filter["limit"] = c.QueryInt("limit")
-	filter["offset"] = c.QueryInt("offset")
+	filter["limit"] = limit
+	filter["after"] = c.Query("after", "")
 	filter["stock_group"] = c.Query("stock_group", "")
 	filter["description"] = c.Query("description", "")
 
@@ -27,7 +35,16 @@ func (s *StockItemHandler) GetAllStockItems(c *fiber.Ctx) error {
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, err.Error())
 	}
-	return utils.SuccessResponse(c, "success", response)
+
+	pagination := utils.Pagination{
+		Limit:   limit,
+		HasMore: len(response) == limit,
+	}
+	if len(response) > 0 {
+		pagination.After = response[len(response)-1].Code
+	}
+
+	return utils.SuccessPaginatedResponse(c, "success", response, pagination)
 }
 
 func (s *StockItemHandler) GetStockItemByCode(c *fiber.Ctx) error {
