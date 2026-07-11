@@ -12,6 +12,9 @@ import (
 type AppContainer struct {
 	StockItemHandler      *handlers.StockItemHandler
 	StockItemPriceHandler *handlers.StockItemPriceHandler
+	GLAccHandler          *handlers.GLAccHandler
+	PaymentMethodHandler  *handlers.PaymentMethodHandler
+	ProjectHandler        *handlers.ProjectHandler
 }
 
 func NewAppContainer(db *gorm.DB) *AppContainer {
@@ -23,8 +26,23 @@ func NewAppContainer(db *gorm.DB) *AppContainer {
 	stockItemPriceUsecase := usecases.NewStockItemPriceUseCase(stockItemPriceRepo)
 	stockItemPriceHandler := handlers.NewStockItemPriceHandler(stockItemPriceUsecase)
 
+	glAccRepo := repositories.NewGLAccRepository(db)
+	glAccUsecase := usecases.NewGLAccUseCase(glAccRepo)
+	glAccHandler := handlers.NewGLAccHandler(glAccUsecase)
+
+	paymentMethodRepo := repositories.NewPaymentMethodRepository(db)
+	paymentMethodUsecase := usecases.NewPaymentMethodUseCase(paymentMethodRepo)
+	paymentMethodHandler := handlers.NewPaymentMethodHandler(paymentMethodUsecase)
+
+	projectRepo := repositories.NewProjectRepository(db)
+	projectUsecase := usecases.NewProjectUseCase(projectRepo)
+	projectHandler := handlers.NewProjectHandler(projectUsecase)
+
 	return &AppContainer{
 		StockItemHandler:      stockItemHandler,
 		StockItemPriceHandler: stockItemPriceHandler,
+		GLAccHandler:          glAccHandler,
+		PaymentMethodHandler:  paymentMethodHandler,
+		ProjectHandler:        projectHandler,
 	}
 }

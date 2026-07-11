@@ -20,6 +20,9 @@ func SetupRoutes(app *fiber.App, container *container.AppContainer) {
 	api.Use(middleware.AuthMiddleware)
 	initStockItemRoutes(api, container.StockItemHandler)
 	initStockItemPriceRoutes(api, container.StockItemPriceHandler)
+	initGLAccRoutes(api, container.GLAccHandler)
+	initPaymentMethodRoutes(api, container.PaymentMethodHandler)
+	initProjectRoutes(api, container.ProjectHandler)
 }
 
 func initStockItemRoutes(api fiber.Router, handler *handlers.StockItemHandler) {
@@ -34,4 +37,21 @@ func initStockItemPriceRoutes(api fiber.Router, handler *handlers.StockItemPrice
 	api.Get("/stock-items/:code/prices/:dtlKey", handler.GetStockItemPriceByDTLKey)
 	api.Post("/stock-items/:code/prices", handler.CreateStockItemPrice)
 	api.Put("/stock-items/:code/prices/:dtlKey", handler.UpdateStockItemPrice)
+}
+
+func initGLAccRoutes(api fiber.Router, handler *handlers.GLAccHandler) {
+
+	api.Get("/gl-accounts", handler.GetAllGLAccs)
+	api.Get("/gl-accounts/:code", handler.GetGLAccByCode)
+}
+
+func initPaymentMethodRoutes(api fiber.Router, handler *handlers.PaymentMethodHandler) {
+
+	api.Get("/payment-methods", handler.GetAllPaymentMethods)
+}
+
+func initProjectRoutes(api fiber.Router, handler *handlers.ProjectHandler) {
+
+	api.Get("/projects", handler.GetAllProjects)
+	api.Get("/projects/:code", handler.GetProjectByCode)
 }
