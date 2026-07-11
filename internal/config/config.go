@@ -14,6 +14,13 @@ type Config struct {
 	Port       string
 	DBString   string
 	JWT_SECRET string
+
+	SQLAccountAPIHost         string
+	SQLAccountAPIAccessKey    string
+	SQLAccountAPISecretKey    string
+	SQLAccountAPIRegion       string
+	SQLAccountAPIService      string
+	SQLAccountAPISessionToken string
 }
 
 func Load() *Config {
@@ -27,6 +34,15 @@ func Load() *Config {
 	config.Port = getEnv("PORT", "8080")
 	config.DBString = getEnv("DB_STRING", "")
 	config.JWT_SECRET = getEnv("JWT_SECRET", "")
+
+	// Vendor (SQL Account) API credentials — optional until the wrapped
+	// write endpoints are actually used, so these don't fail startup.
+	config.SQLAccountAPIHost = os.Getenv("SQLACCOUNT_API_HOST")
+	config.SQLAccountAPIAccessKey = os.Getenv("SQLACCOUNT_API_ACCESS_KEY")
+	config.SQLAccountAPISecretKey = os.Getenv("SQLACCOUNT_API_SECRET_KEY")
+	config.SQLAccountAPIRegion = os.Getenv("SQLACCOUNT_API_REGION")
+	config.SQLAccountAPIService = os.Getenv("SQLACCOUNT_API_SERVICE")
+	config.SQLAccountAPISessionToken = os.Getenv("SQLACCOUNT_API_SESSION_TOKEN")
 
 	return &config
 }

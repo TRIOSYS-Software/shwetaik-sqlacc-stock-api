@@ -24,7 +24,7 @@ func main() {
 
 	app := fiber.New()
 
-	container := container.NewAppContainer(db)
+	container := container.NewAppContainer(db, cfg)
 	routes.SetupRoutes(app, container)
 	if err := app.Listen(cfg.Host + ":" + cfg.Port); err != nil {
 		fiberlog.Fatalf("Error starting server: %v", err)
