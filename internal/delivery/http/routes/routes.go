@@ -36,8 +36,7 @@ func initStockItemPriceRoutes(api fiber.Router, handler *handlers.StockItemPrice
 
 	api.Get("/stock-items/:code/prices", handler.GetStockItemPricesByCode)
 	api.Get("/stock-items/:code/prices/:dtlKey", handler.GetStockItemPriceByDTLKey)
-	api.Post("/stock-items/:code/prices", handler.CreateStockItemPrice)
-	api.Put("/stock-items/:code/prices/:dtlKey", handler.UpdateStockItemPrice)
+	api.Put("/stock-items/:code/prices", handler.PutStockItemPrices)
 }
 
 func initGLAccRoutes(api fiber.Router, handler *handlers.GLAccHandler) {

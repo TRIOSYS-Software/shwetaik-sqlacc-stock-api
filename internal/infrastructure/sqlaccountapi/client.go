@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"shwetaik-sqlacc-stock-api/internal/config"
-	"shwetaik-sqlacc-stock-api/internal/domain/repositories"
 )
 
 type Client struct {
@@ -22,7 +21,7 @@ type Client struct {
 	httpClient   *http.Client
 }
 
-func NewClient(cfg *config.Config) repositories.PaymentVoucherGateway {
+func NewClient(cfg *config.Config) *Client {
 	return &Client{
 		baseURL:      cfg.SQLAccountAPIHost,
 		accessKey:    cfg.SQLAccountAPIAccessKey,
@@ -36,6 +35,10 @@ func NewClient(cfg *config.Config) repositories.PaymentVoucherGateway {
 
 func (c *Client) CreatePaymentVoucher(payload map[string]any) (map[string]any, error) {
 	return c.doSignedJSON(http.MethodPost, "/paymentvoucher", payload)
+}
+
+func (c *Client) PutStockItemPrice(dockey int, payload map[string]any) (map[string]any, error) {
+	return c.doSignedJSON(http.MethodPut, fmt.Sprintf("/stockitem/%d", dockey), payload)
 }
 
 func (c *Client) doSignedJSON(method, path string, payload map[string]any) (map[string]any, error) {

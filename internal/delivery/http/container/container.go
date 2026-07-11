@@ -21,12 +21,14 @@ type AppContainer struct {
 }
 
 func NewAppContainer(db *gorm.DB, cfg *config.Config) *AppContainer {
+	vendorAPIClient := sqlaccountapi.NewClient(cfg)
+
 	stockItemRepo := repositories.NewStockItemRepository(db)
 	stockItemUsecase := usecases.NewStockItemUseCase(stockItemRepo)
 	stockItemHandler := handlers.NewStockItemHandler(stockItemUsecase)
 
 	stockItemPriceRepo := repositories.NewStockItemPriceRepository(db)
-	stockItemPriceUsecase := usecases.NewStockItemPriceUseCase(stockItemPriceRepo)
+	stockItemPriceUsecase := usecases.NewStockItemPriceUseCase(stockItemPriceRepo, stockItemRepo, vendorAPIClient)
 	stockItemPriceHandler := handlers.NewStockItemPriceHandler(stockItemPriceUsecase)
 
 	glAccRepo := repositories.NewGLAccRepository(db)
@@ -41,8 +43,7 @@ func NewAppContainer(db *gorm.DB, cfg *config.Config) *AppContainer {
 	projectUsecase := usecases.NewProjectUseCase(projectRepo)
 	projectHandler := handlers.NewProjectHandler(projectUsecase)
 
-	paymentVoucherGateway := sqlaccountapi.NewClient(cfg)
-	paymentVoucherUsecase := usecases.NewPaymentVoucherUseCase(paymentVoucherGateway)
+	paymentVoucherUsecase := usecases.NewPaymentVoucherUseCase(vendorAPIClient)
 	paymentVoucherHandler := handlers.NewPaymentVoucherHandler(paymentVoucherUsecase)
 
 	return &AppContainer{
