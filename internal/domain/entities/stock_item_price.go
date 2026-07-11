@@ -2,8 +2,6 @@ package entities
 
 import (
 	"time"
-
-	"gorm.io/gorm"
 )
 
 type STItemPrice struct {
@@ -25,14 +23,4 @@ type STItemPrice struct {
 // TableName specifies the table name for GORM
 func (STItemPrice) TableName() string {
 	return "ST_ITEM_PRICE"
-}
-
-func (s *STItemPrice) BeforeCreate(db *gorm.DB) error {
-	var maxSeq int
-	err := db.Model(&STItemPrice{}).Select("MAX(seq)").Where("CODE = ?", s.Code).Scan(&maxSeq).Error
-	if err != nil {
-		return err
-	}
-	s.Seq = maxSeq + 1000
-	return nil
 }

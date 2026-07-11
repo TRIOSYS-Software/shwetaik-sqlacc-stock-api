@@ -132,7 +132,29 @@ func (r *StockItemRepositoryImpl) GetAllStockItems(filter map[string]any) ([]ent
 }
 
 func (r *StockItemRepositoryImpl) GetStockItemByCode(code string) (*entities.STItem, error) {
+	// Select only the columns the response DTO uses and fetch prices and
+	// barcodes as separate targeted queries rather than GORM Preload, which
+	// otherwise runs SELECT * on both — pulling ST_ITEM's BLOB columns
+	// (PICTURE, ATTACHMENTS, NOTE, DESCRIPTION3) and every price row's NOTE
+	// BLOB, none of which the response ever uses.
 	var stockItem entities.STItem
-	err := r.db.Where("code = ?", code).Preload("STItemPrices").Preload("STItemBarcodes").First(&stockItem).Error
-	return &stockItem, err
+	if err := r.db.Select("DOCKEY", "CODE", "DESCRIPTION", "STOCKGROUP").
+		Where("code = ?", code).First(&stockItem).Error; err != nil {
+		return nil, err
+	}
+
+	var prices []entities.STItemPrice
+	if err := r.db.Select("DTLKEY", "CODE", "PRICETAG", "UOM", "QTY", "STOCKVALUE").
+		Where("code = ?", code).Find(&prices).Error; err != nil {
+		return nil, err
+	}
+	stockItem.STItemPrices = prices
+
+	var barcodes []entities.STItemBarcode
+	if err := r.db.Where("code = ?", code).Find(&barcodes).Error; err != nil {
+		return nil, err
+	}
+	stockItem.STItemBarcodes = barcodes
+
+	return &stockItem, nil
 }
