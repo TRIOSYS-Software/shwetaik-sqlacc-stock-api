@@ -5,6 +5,8 @@ import (
 	"shwetaik-sqlacc-stock-api/internal/delivery/http/container"
 	"shwetaik-sqlacc-stock-api/internal/delivery/http/routes"
 	"shwetaik-sqlacc-stock-api/internal/infrastructure/database"
+	"shwetaik-sqlacc-stock-api/internal/infrastructure/monitor"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	fiberlog "github.com/gofiber/fiber/v2/log"
@@ -17,6 +19,8 @@ func main() {
 	if err != nil {
 		fiberlog.Fatalf("Error connecting to database: %v", err)
 	}
+
+	monitor.StartStockItemChangeMonitor(db, 30*time.Second)
 
 	app := fiber.New()
 

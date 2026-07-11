@@ -23,136 +23,109 @@ func (r *StockItemRepositoryImpl) GetAllStockItems(filter map[string]any) ([]ent
 	args := []interface{}{}
 
 	if stockGroup, ok := filter["stock_group"].(string); ok && stockGroup != "" {
-		whereClauses = append(whereClauses, "si.STOCKGROUP LIKE ?")
+		whereClauses = append(whereClauses, "STOCKGROUP LIKE ?")
 		args = append(args, "%"+stockGroup+"%")
 	}
 	if description, ok := filter["description"].(string); ok && description != "" {
-		whereClauses = append(whereClauses, "si.DESCRIPTION LIKE ?")
+		whereClauses = append(whereClauses, "DESCRIPTION LIKE ?")
 		args = append(args, "%"+description+"%")
 	}
-
-	// Build the JOIN query
-	baseQuery := `
-		SELECT si.*,
-			   sip.DTLKEY AS price_dtlkey, sip.CODE AS price_code, sip.TAGTYPE AS price_tagtype,
-			   sip.COMPANY AS price_company, sip.SEQ AS price_seq, sip.PRICETAG AS price_pricetag,
-			   sip.UOM AS price_uom, sip.QTY AS price_qty, sip.STOCKVALUE AS price_stockvalue,
-			   sip.DISCOUNT AS price_discount, sip.DATEFROM AS price_datefrom, sip.DATETO AS price_dateto,
-			   sip.NOTE AS price_note, sib.AUTOKEY AS barcode_autokey, sib.BARCODE AS barcode,
-			   sib.UOM AS barcode_uom 
-		FROM (
-			SELECT si.*
-			FROM ST_ITEM si
-			%s
-			ORDER BY si.CODE
-			%s
-		) si
-		LEFT JOIN ST_ITEM_PRICE sip ON si.code = sip.code
-		LEFT JOIN ST_ITEM_BARCODE sib ON si.code = sib.code
-	`
+	// Keyset pagination: the caller passes the CODE of the last item from
+	// the previous page instead of an offset, so the DB only has to find
+	// rows past that point rather than re-materializing every prior page.
+	if after, ok := filter["after"].(string); ok && after != "" {
+		whereClauses = append(whereClauses, "CODE > ?")
+		args = append(args, after)
+	}
 
 	whereSQL := ""
 	if len(whereClauses) > 0 {
 		whereSQL = " WHERE " + strings.Join(whereClauses, " AND ")
 	}
 
+	limit, hasLimit := filter["limit"].(int)
+	if !hasLimit || limit <= 0 {
+		limit = 0
+	}
+
 	paginationSQL := ""
-	if limit, ok := filter["limit"].(int); ok && limit > 0 {
-		if offset, ok := filter["offset"].(int); ok && offset > 0 {
-			paginationSQL = fmt.Sprintf("ROWS %d TO %d", offset+1, offset+limit)
-		} else {
-			paginationSQL = fmt.Sprintf("ROWS %d", limit)
-		}
+	if limit > 0 {
+		paginationSQL = fmt.Sprintf("ROWS %d", limit)
 	}
 
-	updateQuery := fmt.Sprintf(baseQuery, whereSQL, paginationSQL)
+	// Reused as a derived table below so prices/barcodes are joined against
+	// the same filtered/paginated code set in SQL, rather than collected
+	// into a Go slice and matched with a large IN (...) list — Firebird's
+	// optimizer handles a join on an indexed CODE column far better than an
+	// IN list of hundreds/thousands of literal values, which tends to fall
+	// back to a per-row scan instead of index seeks.
+	filteredCodesSQL := fmt.Sprintf(`
+		SELECT CODE FROM ST_ITEM
+		%s
+		ORDER BY CODE
+		%s
+	`, whereSQL, paginationSQL)
 
-	// Struct for joined result
-	type joinedResult struct {
-		entities.STItem
-		PriceDtlKey     *int     `gorm:"column:PRICE_DTLKEY"`
-		PriceCode       *string  `gorm:"column:PRICE_CODE"`
-		PriceTagType    *string  `gorm:"column:PRICE_TAGTYPE"`
-		PriceCompany    *string  `gorm:"column:PRICE_COMPANY"`
-		PriceSeq        *int     `gorm:"column:PRICE_SEQ"`
-		PricePriceTag   *string  `gorm:"column:PRICE_PRICETAG"`
-		PriceUOM        *string  `gorm:"column:PRICE_UOM"`
-		PriceQty        *float64 `gorm:"column:PRICE_QTY"`
-		PriceStockValue *float64 `gorm:"column:PRICE_STOCKVALUE"`
-		PriceDiscount   *string  `gorm:"column:PRICE_DISCOUNT"`
-		PriceDateFrom   *string  `gorm:"column:PRICE_DATEFROM"`
-		PriceDateTo     *string  `gorm:"column:PRICE_DATETO"`
-		PriceNote       *[]byte  `gorm:"column:PRICE_NOTE"`
-		BarcodeAutoKey  *int     `gorm:"column:BARCODE_AUTOKEY"`
-		Barcode         *string  `gorm:"column:BARCODE"`
-		BarcodeUOM      *string  `gorm:"column:BARCODE_UOM"`
-	}
+	// Only select columns the response DTO actually uses — ST_ITEM has
+	// several BLOB columns (DESCRIPTION3, PICTURE, ATTACHMENTS, NOTE) that
+	// are otherwise fetched and discarded for every row, and Firebird reads
+	// each non-null BLOB as a separate round trip.
+	itemQuery := fmt.Sprintf(`
+		SELECT DOCKEY, CODE, DESCRIPTION, STOCKGROUP
+		FROM ST_ITEM
+		%s
+		ORDER BY CODE
+		%s
+	`, whereSQL, paginationSQL)
 
-	var joinedRows []joinedResult
-	err := r.db.Raw(updateQuery, args...).Scan(&joinedRows).Error
-	if err != nil {
+	// Fetch the filtered/paginated items first; this query alone determines
+	// the item set and its order.
+	var stockItems []entities.STItem
+	if err := r.db.Raw(itemQuery, args...).Scan(&stockItems).Error; err != nil {
 		return nil, err
 	}
+	if len(stockItems) == 0 {
+		return stockItems, nil
+	}
 
-	// Map results to stockItems with prices
-	stockItemMap := make(map[string]*entities.STItem)
-	for _, row := range joinedRows {
-		item, exists := stockItemMap[row.Code]
-		if !exists {
-			itemCopy := row.STItem
-			itemCopy.STItemPrices = []entities.STItemPrice{}
-			stockItemMap[row.Code] = &itemCopy
-			item = &itemCopy
-		}
-		if row.PriceCode != nil {
-			price := entities.STItemPrice{
-				DtlKey:     0,
-				Code:       *row.PriceCode,
-				TagType:    "",
-				Company:    row.PriceCompany,
-				Seq:        0,
-				PriceTag:   row.PricePriceTag,
-				UOM:        "",
-				Qty:        row.PriceQty,
-				StockValue: row.PriceStockValue,
-				Discount:   row.PriceDiscount,
-				Note:       row.PriceNote,
-			}
-			if row.PriceDtlKey != nil {
-				price.DtlKey = *row.PriceDtlKey
-			}
-			if row.PriceTagType != nil {
-				price.TagType = *row.PriceTagType
-			}
-			if row.PriceSeq != nil {
-				price.Seq = *row.PriceSeq
-			}
-			if row.PriceUOM != nil {
-				price.UOM = *row.PriceUOM
-			}
-			// DateFrom/DateTo parsing omitted for brevity
-			item.STItemPrices = append(item.STItemPrices, price)
-		}
-		// Barcode handling can be added similarly if needed
-		if row.BarcodeAutoKey != nil {
-			barcode := entities.STItemBarcode{
-				AutoKey: *row.BarcodeAutoKey,
-				Code:    row.Code,
-			}
-			if row.Barcode != nil {
-				barcode.Barcode = *row.Barcode
-			}
-			if row.BarcodeUOM != nil {
-				barcode.UOM = *row.BarcodeUOM
-			}
-			item.STItemBarcodes = append(item.STItemBarcodes, barcode)
+	itemIndexByCode := make(map[string]int, len(stockItems))
+	for i, item := range stockItems {
+		itemIndexByCode[item.Code] = i
+		stockItems[i].STItemPrices = []entities.STItemPrice{}
+		stockItems[i].STItemBarcodes = []entities.STItemBarcode{}
+	}
+
+	// Prices and barcodes are each their own one-to-many relation to ST_ITEM,
+	// so they're joined independently and merged by code in Go — joining
+	// both in a single query would cross-multiply rows (fan-out duplication).
+	priceQuery := fmt.Sprintf(`
+		SELECT sip.DTLKEY, sip.CODE, sip.PRICETAG, sip.UOM, sip.QTY, sip.STOCKVALUE
+		FROM (%s) fc
+		JOIN ST_ITEM_PRICE sip ON fc.CODE = sip.CODE
+	`, filteredCodesSQL)
+	var prices []entities.STItemPrice
+	if err := r.db.Raw(priceQuery, args...).Scan(&prices).Error; err != nil {
+		return nil, err
+	}
+	for _, price := range prices {
+		if idx, ok := itemIndexByCode[price.Code]; ok {
+			stockItems[idx].STItemPrices = append(stockItems[idx].STItemPrices, price)
 		}
 	}
 
-	// Convert map to slice
-	stockItems := make([]entities.STItem, 0, len(stockItemMap))
-	for _, item := range stockItemMap {
-		stockItems = append(stockItems, *item)
+	barcodeQuery := fmt.Sprintf(`
+		SELECT sib.AUTOKEY, sib.CODE, sib.BARCODE, sib.UOM
+		FROM (%s) fc
+		JOIN ST_ITEM_BARCODE sib ON fc.CODE = sib.CODE
+	`, filteredCodesSQL)
+	var barcodes []entities.STItemBarcode
+	if err := r.db.Raw(barcodeQuery, args...).Scan(&barcodes).Error; err != nil {
+		return nil, err
+	}
+	for _, barcode := range barcodes {
+		if idx, ok := itemIndexByCode[barcode.Code]; ok {
+			stockItems[idx].STItemBarcodes = append(stockItems[idx].STItemBarcodes, barcode)
+		}
 	}
 
 	return stockItems, nil
