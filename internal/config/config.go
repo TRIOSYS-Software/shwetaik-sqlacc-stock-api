@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"strings"
 
 	fiberlog "github.com/gofiber/fiber/v2/log"
 	"github.com/joho/godotenv"
@@ -21,6 +22,8 @@ type Config struct {
 	SQLAccountAPIRegion       string
 	SQLAccountAPIService      string
 	SQLAccountAPISessionToken string
+
+	WebhookURLs []string
 }
 
 func Load() *Config {
@@ -44,7 +47,24 @@ func Load() *Config {
 	config.SQLAccountAPIService = os.Getenv("SQLACCOUNT_API_SERVICE")
 	config.SQLAccountAPISessionToken = os.Getenv("SQLACCOUNT_API_SESSION_TOKEN")
 
+	// Optional, comma-separated — the stock item monitor no-ops on webhook
+	// delivery if unset.
+	config.WebhookURLs = parseWebhookURLs(os.Getenv("WEBHOOK_URL"))
+
 	return &config
+}
+
+func parseWebhookURLs(raw string) []string {
+	if raw == "" {
+		return nil
+	}
+	var urls []string
+	for url := range strings.SplitSeq(raw, ",") {
+		if url = strings.TrimSpace(url); url != "" {
+			urls = append(urls, url)
+		}
+	}
+	return urls
 }
 
 func getEnv(key, defaultValue string) string {

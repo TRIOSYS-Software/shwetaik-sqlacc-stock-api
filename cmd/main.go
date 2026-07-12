@@ -6,6 +6,7 @@ import (
 	"shwetaik-sqlacc-stock-api/internal/delivery/http/routes"
 	"shwetaik-sqlacc-stock-api/internal/infrastructure/database"
 	"shwetaik-sqlacc-stock-api/internal/infrastructure/monitor"
+	"shwetaik-sqlacc-stock-api/internal/infrastructure/webhook"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -20,7 +21,8 @@ func main() {
 		fiberlog.Fatalf("Error connecting to database: %v", err)
 	}
 
-	monitor.StartStockItemChangeMonitor(db, 30*time.Second)
+	webhookClient := webhook.NewClient(cfg.WebhookURLs)
+	monitor.StartStockItemChangeMonitor(db, webhookClient, 30*time.Second)
 
 	app := fiber.New()
 
