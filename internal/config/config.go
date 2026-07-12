@@ -21,6 +21,8 @@ type Config struct {
 	SQLAccountAPIRegion       string
 	SQLAccountAPIService      string
 	SQLAccountAPISessionToken string
+
+	WebhookURL string
 }
 
 func Load() *Config {
@@ -43,6 +45,9 @@ func Load() *Config {
 	config.SQLAccountAPIRegion = os.Getenv("SQLACCOUNT_API_REGION")
 	config.SQLAccountAPIService = os.Getenv("SQLACCOUNT_API_SERVICE")
 	config.SQLAccountAPISessionToken = os.Getenv("SQLACCOUNT_API_SESSION_TOKEN")
+
+	// Optional — the stock item monitor no-ops on webhook delivery if unset.
+	config.WebhookURL = os.Getenv("WEBHOOK_URL")
 
 	return &config
 }
