@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"shwetaik-sqlacc-stock-api/internal/config"
 	"shwetaik-sqlacc-stock-api/pkg/utils"
 	"strings"
 
@@ -23,7 +24,7 @@ func AuthMiddleware(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusUnauthorized, "Unauthorized")
 	}
 
-	if claims.Service != "stock-api" {
+	if claims.Service != config.Cfg.ServiceName {
 		return utils.ErrorResponse(c, fiber.StatusUnauthorized, "Unauthorized")
 	}
 
