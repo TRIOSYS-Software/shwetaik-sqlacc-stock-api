@@ -22,7 +22,7 @@ func (h *PaymentVoucherHandler) CreatePaymentVoucher(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, err.Error())
 	}
 
-	response, err := h.usecase.CreateExpensePaymentVoucher(req)
+	response, err := h.usecase.CreateExpensePaymentVoucher(c.Context(), req)
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusBadGateway, err.Error())
 	}

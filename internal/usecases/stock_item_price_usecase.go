@@ -1,6 +1,8 @@
 package usecases
 
 import (
+	"context"
+
 	"shwetaik-sqlacc-stock-api/internal/delivery/dto"
 	"shwetaik-sqlacc-stock-api/internal/domain/entities"
 	"shwetaik-sqlacc-stock-api/internal/domain/repositories"
@@ -41,7 +43,7 @@ func (u StockItemPriceUseCase) GetStockItemPriceByDTLKey(code string, dtlKey int
 // The vendor responds with the entire stock item record (BOM, barcodes,
 // base64 picture, everything), so only sdscustomerprice is picked back out
 // of that response rather than relaying it whole.
-func (u StockItemPriceUseCase) PutStockItemPrices(code string, items []dto.StockItemPriceItem) ([]dto.StockItemPriceResponse, error) {
+func (u StockItemPriceUseCase) PutStockItemPrices(ctx context.Context, code string, items []dto.StockItemPriceItem) ([]dto.StockItemPriceResponse, error) {
 	stockItem, err := u.stockItemRepo.GetStockItemByCode(code)
 	if err != nil {
 		return nil, err
@@ -66,7 +68,7 @@ func (u StockItemPriceUseCase) PutStockItemPrices(code string, items []dto.Stock
 		"sdscustomerprice": priceLines,
 	}
 
-	vendorResponse, err := u.vendorGateway.PutStockItemPrice(stockItem.DocKey, payload)
+	vendorResponse, err := u.vendorGateway.PutStockItemPrice(ctx, stockItem.DocKey, payload)
 	if err != nil {
 		return nil, err
 	}

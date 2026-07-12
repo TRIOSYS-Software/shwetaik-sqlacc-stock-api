@@ -83,7 +83,7 @@ func (s *StockItemPriceHandler) PutStockItemPrices(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, err.Error())
 	}
 
-	response, err := s.usecase.PutStockItemPrices(code, req.Prices)
+	response, err := s.usecase.PutStockItemPrices(c.Context(), code, req.Prices)
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, err.Error())
 	}

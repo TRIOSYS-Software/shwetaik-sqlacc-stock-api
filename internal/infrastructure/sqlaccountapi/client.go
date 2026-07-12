@@ -2,10 +2,12 @@ package sqlaccountapi
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"shwetaik-sqlacc-stock-api/internal/config"
@@ -33,15 +35,15 @@ func NewClient(cfg *config.Config) *Client {
 	}
 }
 
-func (c *Client) CreatePaymentVoucher(payload map[string]any) (map[string]any, error) {
-	return c.doSignedJSON(http.MethodPost, "/paymentvoucher", payload)
+func (c *Client) CreatePaymentVoucher(ctx context.Context, payload map[string]any) (map[string]any, error) {
+	return c.doSignedJSON(ctx, http.MethodPost, "/paymentvoucher", payload)
 }
 
-func (c *Client) PutStockItemPrice(dockey int, payload map[string]any) (map[string]any, error) {
-	return c.doSignedJSON(http.MethodPut, fmt.Sprintf("/stockitem/%d", dockey), payload)
+func (c *Client) PutStockItemPrice(ctx context.Context, dockey int, payload map[string]any) (map[string]any, error) {
+	return c.doSignedJSON(ctx, http.MethodPut, fmt.Sprintf("/stockitem/%d", dockey), payload)
 }
 
-func (c *Client) doSignedJSON(method, path string, payload map[string]any) (map[string]any, error) {
+func (c *Client) doSignedJSON(ctx context.Context, method, path string, payload map[string]any) (map[string]any, error) {
 	if c.baseURL == "" || c.accessKey == "" || c.secretKey == "" || c.region == "" || c.service == "" {
 		return nil, fmt.Errorf("sqlaccountapi: vendor API credentials are not configured")
 	}
@@ -51,7 +53,8 @@ func (c *Client) doSignedJSON(method, path string, payload map[string]any) (map[
 		return nil, fmt.Errorf("sqlaccountapi: marshal request body: %w", err)
 	}
 
-	req, err := http.NewRequest(method, c.baseURL+path, bytes.NewReader(body))
+	url := strings.TrimSuffix(c.baseURL, "/") + path
+	req, err := http.NewRequestWithContext(ctx, method, url, bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("sqlaccountapi: build request: %w", err)
 	}
