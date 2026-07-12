@@ -3,6 +3,7 @@ package webhook
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"log"
 	"net/http"
 	"sync"
@@ -81,6 +82,8 @@ func (c *Client) sendTo(url, event string, codes []string, body []byte) {
 		if err != nil {
 			log.Printf("webhook: attempt %d/%d to %s for event %q failed: %v", attempt, maxAttempts, url, event, err)
 		} else {
+			// Drain the body before closing so the connection can be reused.
+			_, _ = io.Copy(io.Discard, resp.Body)
 			resp.Body.Close()
 			if resp.StatusCode == http.StatusOK {
 				return

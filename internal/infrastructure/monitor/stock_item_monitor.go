@@ -47,9 +47,12 @@ func StartStockItemChangeMonitor(db *gorm.DB, webhookClient *webhook.Client, int
 
 		for range ticker.C {
 			if !codesLoaded {
-				knownCodes, lastCount = loadKnownCodes(db)
-				codesLoaded = true
-				log.Printf("stock item monitor: loaded %d known codes", len(knownCodes))
+				var ok bool
+				knownCodes, lastCount, ok = loadKnownCodes(db)
+				if ok {
+					codesLoaded = true
+					log.Printf("stock item monitor: loaded %d known codes", len(knownCodes))
+				}
 			}
 
 			var changedCodes []string
@@ -70,24 +73,27 @@ func StartStockItemChangeMonitor(db *gorm.DB, webhookClient *webhook.Client, int
 	}()
 }
 
-func loadKnownCodes(db *gorm.DB) (map[string]struct{}, int) {
-	var count int64
-	if err := db.Raw("SELECT COUNT(*) FROM ST_ITEM").Scan(&count).Error; err != nil {
+// loadKnownCodes returns ok=false on any query failure so the caller can
+// retry on a later tick instead of permanently treating the load as done
+// with an empty/incomplete code set.
+func loadKnownCodes(db *gorm.DB) (codes map[string]struct{}, count int, ok bool) {
+	var total int64
+	if err := db.Raw("SELECT COUNT(*) FROM ST_ITEM").Scan(&total).Error; err != nil {
 		log.Printf("stock item monitor: failed to count items: %v", err)
-		return map[string]struct{}{}, 0
+		return nil, 0, false
 	}
 
-	var codes []stockItemCode
-	if err := db.Raw("SELECT CODE FROM ST_ITEM").Scan(&codes).Error; err != nil {
+	var rows []stockItemCode
+	if err := db.Raw("SELECT CODE FROM ST_ITEM").Scan(&rows).Error; err != nil {
 		log.Printf("stock item monitor: failed to load known codes: %v", err)
-		return map[string]struct{}{}, int(count)
+		return nil, 0, false
 	}
 
-	known := make(map[string]struct{}, len(codes))
-	for _, c := range codes {
-		known[c.Code] = struct{}{}
+	known := make(map[string]struct{}, len(rows))
+	for _, r := range rows {
+		known[r.Code] = struct{}{}
 	}
-	return known, int(count)
+	return known, int(total), true
 }
 
 func checkUpdatedStockItems(db *gorm.DB, watermark int64) ([]string, int64) {
