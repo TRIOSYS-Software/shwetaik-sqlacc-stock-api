@@ -21,7 +21,7 @@ func main() {
 		fiberlog.Fatalf("Error connecting to database: %v", err)
 	}
 
-	webhookClient := webhook.NewClient(cfg.WebhookURL)
+	webhookClient := webhook.NewClient(cfg.WebhookURLs)
 	monitor.StartStockItemChangeMonitor(db, webhookClient, 30*time.Second)
 
 	app := fiber.New()

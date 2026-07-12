@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"sync"
 	"time"
 )
 
@@ -21,23 +22,25 @@ type Payload struct {
 }
 
 type Client struct {
-	url        string
+	urls       []string
 	httpClient *http.Client
 }
 
-func NewClient(url string) *Client {
+func NewClient(urls []string) *Client {
 	return &Client{
-		url:        url,
+		urls:       urls,
 		httpClient: &http.Client{Timeout: 10 * time.Second},
 	}
 }
 
-// Send posts the event payload, retrying up to maxAttempts times (with a
-// fixed delay between attempts) until a 200 response is received. A no-op
-// if no webhook URL is configured. Runs synchronously — callers that don't
-// want to block should call this in its own goroutine.
+// Send posts the event payload to every configured URL concurrently, each
+// retrying independently up to maxAttempts times (with a fixed delay
+// between attempts) until a 200 response is received. A no-op if no
+// webhook URLs are configured. Blocks until every URL has either succeeded
+// or exhausted its retries — callers that don't want to block should call
+// this in its own goroutine.
 func (c *Client) Send(event string, codes []string) {
-	if c.url == "" {
+	if len(c.urls) == 0 {
 		return
 	}
 
@@ -54,23 +57,35 @@ func (c *Client) Send(event string, codes []string) {
 		return
 	}
 
+	var wg sync.WaitGroup
+	for _, url := range c.urls {
+		wg.Add(1)
+		go func(url string) {
+			defer wg.Done()
+			c.sendTo(url, event, codes, body)
+		}(url)
+	}
+	wg.Wait()
+}
+
+func (c *Client) sendTo(url, event string, codes []string, body []byte) {
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
-		req, err := http.NewRequest(http.MethodPost, c.url, bytes.NewReader(body))
+		req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(body))
 		if err != nil {
-			log.Printf("webhook: failed to build request: %v", err)
+			log.Printf("webhook: failed to build request for %s: %v", url, err)
 			return
 		}
 		req.Header.Set("Content-Type", "application/json")
 
 		resp, err := c.httpClient.Do(req)
 		if err != nil {
-			log.Printf("webhook: attempt %d/%d for event %q failed: %v", attempt, maxAttempts, event, err)
+			log.Printf("webhook: attempt %d/%d to %s for event %q failed: %v", attempt, maxAttempts, url, event, err)
 		} else {
 			resp.Body.Close()
 			if resp.StatusCode == http.StatusOK {
 				return
 			}
-			log.Printf("webhook: attempt %d/%d for event %q got status %d", attempt, maxAttempts, event, resp.StatusCode)
+			log.Printf("webhook: attempt %d/%d to %s for event %q got status %d", attempt, maxAttempts, url, event, resp.StatusCode)
 		}
 
 		if attempt < maxAttempts {
@@ -78,5 +93,5 @@ func (c *Client) Send(event string, codes []string) {
 		}
 	}
 
-	log.Printf("webhook: giving up after %d attempts for event %q (codes=%v)", maxAttempts, event, codes)
+	log.Printf("webhook: giving up after %d attempts to %s for event %q (codes=%v)", maxAttempts, url, event, codes)
 }
