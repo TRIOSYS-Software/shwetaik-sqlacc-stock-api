@@ -1,6 +1,8 @@
 package usecases
 
 import (
+	"context"
+
 	"shwetaik-sqlacc-stock-api/internal/delivery/dto"
 	"shwetaik-sqlacc-stock-api/internal/domain/repositories"
 )
@@ -18,7 +20,7 @@ func NewPaymentVoucherUseCase(gateway repositories.PaymentVoucherGateway) *Payme
 // paymentmethod, docamt, sdsdocdetail, ...) match the vendor's actual
 // schema, not the simplified request this endpoint accepts. docno is left
 // as an empty string — the vendor assigns it.
-func (u PaymentVoucherUseCase) CreateExpensePaymentVoucher(req dto.PaymentVoucherRequest) (map[string]any, error) {
+func (u PaymentVoucherUseCase) CreateExpensePaymentVoucher(ctx context.Context, req dto.PaymentVoucherRequest) (map[string]any, error) {
 	var sdsDetails []map[string]any
 	for _, detail := range req.Details {
 		sdsDetails = append(sdsDetails, map[string]any{
@@ -38,5 +40,5 @@ func (u PaymentVoucherUseCase) CreateExpensePaymentVoucher(req dto.PaymentVouche
 		"sdsdocdetail":  sdsDetails,
 	}
 
-	return u.gateway.CreatePaymentVoucher(payload)
+	return u.gateway.CreatePaymentVoucher(ctx, payload)
 }
