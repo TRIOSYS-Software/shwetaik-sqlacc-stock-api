@@ -37,6 +37,15 @@ func (r *StockItemRepositoryImpl) GetAllStockItems(filter map[string]any) ([]ent
 		whereClauses = append(whereClauses, "CODE > ?")
 		args = append(args, after)
 	}
+	// When a location is given, restrict to items that actually have stock
+	// there — this has to be a WHERE condition (not a post-fetch filter),
+	// otherwise pagination/"after" would be computed against the full
+	// unfiltered item set and pages could come back short or skip items.
+	location, _ := filter["location"].(string)
+	if location != "" {
+		whereClauses = append(whereClauses, "EXISTS (SELECT 1 FROM ST_TR tr WHERE tr.ITEMCODE = ST_ITEM.CODE AND tr.LOCATION = ?)")
+		args = append(args, location)
+	}
 
 	whereSQL := ""
 	if len(whereClauses) > 0 {
@@ -93,6 +102,10 @@ func (r *StockItemRepositoryImpl) GetAllStockItems(filter map[string]any) ([]ent
 		itemIndexByCode[item.Code] = i
 		stockItems[i].STItemPrices = []entities.STItemPrice{}
 		stockItems[i].STItemBarcodes = []entities.STItemBarcode{}
+		if location != "" {
+			loc := location
+			stockItems[i].Location = &loc
+		}
 	}
 
 	// Prices and barcodes are each their own one-to-many relation to ST_ITEM,
@@ -128,10 +141,46 @@ func (r *StockItemRepositoryImpl) GetAllStockItems(filter map[string]any) ([]ent
 		}
 	}
 
+	// Balance comes from ST_TR (stock transactions), joined against the same
+	// filtered/paginated code set rather than an IN (...) list of codes —
+	// ST_TR is a transaction ledger, likely much larger than ST_ITEM, so the
+	// same index-seek-over-IN-list reasoning as prices/barcodes applies.
+	// Items with no matching ST_TR rows simply keep the zero-value Balance.
+	balanceWhereSQL := ""
+	if location != "" {
+		balanceWhereSQL = "WHERE tr.LOCATION = ?"
+	}
+	balanceQuery := fmt.Sprintf(`
+		SELECT tr.ITEMCODE, SUM(tr.QTY) AS CURRENT_BALANCE
+		FROM (%s) fc
+		JOIN ST_TR tr ON fc.CODE = tr.ITEMCODE
+		%s
+		GROUP BY tr.ITEMCODE
+	`, filteredCodesSQL, balanceWhereSQL)
+
+	balanceArgs := append([]interface{}{}, args...)
+	if location != "" {
+		balanceArgs = append(balanceArgs, location)
+	}
+
+	type stockItemBalance struct {
+		ItemCode string  `gorm:"column:ITEMCODE"`
+		Balance  float64 `gorm:"column:CURRENT_BALANCE"`
+	}
+	var balances []stockItemBalance
+	if err := r.db.Raw(balanceQuery, balanceArgs...).Scan(&balances).Error; err != nil {
+		return nil, err
+	}
+	for _, b := range balances {
+		if idx, ok := itemIndexByCode[b.ItemCode]; ok {
+			stockItems[idx].Balance = b.Balance
+		}
+	}
+
 	return stockItems, nil
 }
 
-func (r *StockItemRepositoryImpl) GetStockItemByCode(code string) (*entities.STItem, error) {
+func (r *StockItemRepositoryImpl) GetStockItemByCode(code string, location string) (*entities.STItem, error) {
 	// Select only the columns the response DTO uses and fetch prices and
 	// barcodes as separate targeted queries rather than GORM Preload, which
 	// otherwise runs SELECT * on both — pulling ST_ITEM's BLOB columns
@@ -155,6 +204,17 @@ func (r *StockItemRepositoryImpl) GetStockItemByCode(code string) (*entities.STI
 		return nil, err
 	}
 	stockItem.STItemBarcodes = barcodes
+
+	balanceQuery := "SELECT COALESCE(SUM(QTY), 0) FROM ST_TR WHERE ITEMCODE = ?"
+	balanceArgs := []interface{}{code}
+	if location != "" {
+		balanceQuery += " AND LOCATION = ?"
+		balanceArgs = append(balanceArgs, location)
+		stockItem.Location = &location
+	}
+	if err := r.db.Raw(balanceQuery, balanceArgs...).Scan(&stockItem.Balance).Error; err != nil {
+		return nil, err
+	}
 
 	return &stockItem, nil
 }

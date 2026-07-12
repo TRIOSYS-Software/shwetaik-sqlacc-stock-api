@@ -44,7 +44,7 @@ func (u StockItemPriceUseCase) GetStockItemPriceByDTLKey(code string, dtlKey int
 // base64 picture, everything), so only sdscustomerprice is picked back out
 // of that response rather than relaying it whole.
 func (u StockItemPriceUseCase) PutStockItemPrices(ctx context.Context, code string, items []dto.StockItemPriceItem) ([]dto.StockItemPriceResponse, error) {
-	stockItem, err := u.stockItemRepo.GetStockItemByCode(code)
+	stockItem, err := u.stockItemRepo.GetStockItemByCode(code, "")
 	if err != nil {
 		return nil, err
 	}
