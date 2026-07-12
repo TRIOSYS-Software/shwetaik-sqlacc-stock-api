@@ -1,0 +1,602 @@
+openapi: 3.1.0
+info:
+  title: SQL Account Stock API
+  description: >
+    Read API backed directly by the Firebird database used by SQL Accounting
+    Software, plus a small set of write endpoints that wrap the vendor's own
+    REST API (payment vouchers, stock item prices). A background monitor
+    also polls ST_ITEM and fires outbound webhooks on changes — see the
+    Webhooks section below.
+  version: "1.0"
+
+servers:
+  - url: /api/v1
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Stock Items
+  - name: Stock Item Prices
+  - name: GL Accounts
+  - name: Payment Methods
+  - name: Projects
+  - name: Payment Vouchers
+
+paths:
+  /stock-items:
+    get:
+      tags: [Stock Items]
+      summary: List stock items
+      description: >
+        Keyset-paginated list of stock items. `after` should be the `code`
+        of the last item from the previous page (from `pagination.after` in
+        the response), not an offset.
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, default: 100, maximum: 1000 }
+        - name: after
+          in: query
+          description: Code of the last item from the previous page.
+          schema: { type: string }
+        - name: stock_group
+          in: query
+          schema: { type: string }
+        - name: description
+          in: query
+          schema: { type: string }
+        - name: location
+          in: query
+          description: >
+            When set, only items with stock at this location are returned,
+            and `balance` reflects the quantity at that location. When
+            omitted, `balance` is summed across all locations.
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/PaginatedEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: "#/components/schemas/StockItem" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /stock-items/{code}:
+    get:
+      tags: [Stock Items]
+      summary: Get a stock item by code
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema: { type: string }
+        - name: location
+          in: query
+          description: Compute balance at this location instead of summing all locations.
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/StockItem" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/Error"
+
+  /stock-items/{code}/prices:
+    get:
+      tags: [Stock Item Prices]
+      summary: List a stock item's customer prices
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: "#/components/schemas/StockItemPrice" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/Error"
+    put:
+      tags: [Stock Item Prices]
+      summary: Replace a stock item's customer price list
+      description: >
+        Writes through the vendor SQL Account API (not the database). This
+        is a **true replace**, not a merge — the request must include every
+        price line to keep, since any existing line omitted here is
+        dropped by the vendor. A line with no `dtlkey` is created as new; a
+        line with a `dtlkey` replaces the existing line with that key.
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PutStockItemPricesRequest" }
+      responses:
+        "200":
+          description: OK — returns the resulting price list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: "#/components/schemas/StockItemPrice" }
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/Error"
+
+  /stock-items/{code}/prices/{dtlKey}:
+    get:
+      tags: [Stock Item Prices]
+      summary: Get one price line by dtlKey
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema: { type: string }
+        - name: dtlKey
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/StockItemPrice" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/Error"
+
+  /gl-accounts:
+    get:
+      tags: [GL Accounts]
+      summary: List GL accounts
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, default: 100, maximum: 1000 }
+        - name: after
+          in: query
+          description: Code of the last item from the previous page.
+          schema: { type: string }
+        - name: parent
+          in: query
+          description: DOCKEY of the parent account — returns its direct children.
+          schema: { type: integer }
+        - name: acctype
+          in: query
+          schema: { type: string }
+        - name: description
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/PaginatedEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: "#/components/schemas/GLAccount" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /gl-accounts/{code}:
+    get:
+      tags: [GL Accounts]
+      summary: Get a GL account by code
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/GLAccount" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/Error"
+
+  /payment-methods:
+    get:
+      tags: [Payment Methods]
+      summary: List payment methods
+      description: >
+        No pagination — PMMETHOD is a small reference table. Joined against
+        GL_ACC to include the account description.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: "#/components/schemas/PaymentMethod" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/Error"
+
+  /projects:
+    get:
+      tags: [Projects]
+      summary: List projects
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, default: 100, maximum: 1000 }
+        - name: after
+          in: query
+          description: Code of the last item from the previous page.
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/PaginatedEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: "#/components/schemas/Project" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /projects/{code}:
+    get:
+      tags: [Projects]
+      summary: Get a project by code
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/Project" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/Error"
+
+  /payment-vouchers:
+    post:
+      tags: [Payment Vouchers]
+      summary: Create a payment voucher
+      description: >
+        Writes through the vendor SQL Account API (not the database) —
+        POSTs to the vendor's `/paymentvoucher` endpoint, signed with AWS
+        SigV4. `dockey` is left blank; the vendor assigns it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PaymentVoucherRequest" }
+      responses:
+        "200":
+          description: OK — raw response from the vendor API
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "502":
+          description: Vendor API call failed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
+webhooks:
+  itemUpdated:
+    post:
+      summary: Stock item(s) updated
+      description: >
+        Fired by the background monitor when it detects ST_ITEM.LASTMODIFIED
+        changes since the last poll (every 30s). All codes changed within
+        one poll cycle are batched into a single call. Sent to every URL
+        configured via WEBHOOK_URL, concurrently. Retried up to 3 times
+        (fixed 2s delay between attempts) until your endpoint returns 200;
+        gives up and logs after that — there is no dead-letter queue or
+        durable retry beyond this. No authentication is sent on the
+        request; restrict by network/allowlist if that matters to you.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WebhookPayload"
+            example:
+              event: item.updated
+              timestamp: 1731400000
+              codes: ["01-0001", "01-0002"]
+              count: 2
+      responses:
+        "200":
+          description: Acknowledged — no retry will be sent.
+
+  itemDeleted:
+    post:
+      summary: Stock item(s) deleted
+      description: >
+        Fired when the monitor notices ST_ITEM's row count has dropped and
+        confirms via a full code scan which codes vanished since it last
+        knew about them. Same batching, delivery, and retry behavior as
+        itemUpdated.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WebhookPayload"
+            example:
+              event: item.deleted
+              timestamp: 1731400200
+              codes: ["09-9999"]
+              count: 1
+      responses:
+        "200":
+          description: Acknowledged — no retry will be sent.
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid bearer token
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    Error:
+      description: Request failed
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
+  schemas:
+    SuccessEnvelope:
+      type: object
+      properties:
+        status: { type: string, example: success }
+        message: { type: string, example: success }
+        data: {}
+
+    PaginatedEnvelope:
+      type: object
+      properties:
+        status: { type: string, example: success }
+        message: { type: string, example: success }
+        data: {}
+        pagination: { $ref: "#/components/schemas/Pagination" }
+
+    ErrorEnvelope:
+      type: object
+      properties:
+        status: { type: string, example: error }
+        message: { type: string, example: "something went wrong" }
+
+    Pagination:
+      type: object
+      properties:
+        limit: { type: integer }
+        after: { type: string }
+        has_more: { type: boolean }
+
+    WebhookPayload:
+      type: object
+      properties:
+        event:
+          type: string
+          enum: [item.updated, item.deleted]
+        timestamp:
+          type: integer
+          format: int64
+          description: Unix epoch seconds.
+        codes:
+          type: array
+          items: { type: string }
+          description: Stock item codes affected in this batch.
+        count:
+          type: integer
+          description: len(codes)
+      required: [event, timestamp, codes, count]
+
+    StockItem:
+      type: object
+      properties:
+        dockey: { type: integer }
+        code: { type: string }
+        description: { type: string }
+        stock_group: { type: string }
+        balance:
+          type: number
+          format: double
+          description: SUM(QTY) from ST_TR — for the requested location, or all locations if none given.
+        location:
+          type: string
+          description: Only present when a location filter was applied.
+        stock_item_prices:
+          type: array
+          items: { $ref: "#/components/schemas/StockItemPrice" }
+        stock_item_barcodes:
+          type: array
+          items: { $ref: "#/components/schemas/StockItemBarcode" }
+
+    StockItemPrice:
+      type: object
+      properties:
+        dtl_key: { type: integer }
+        code: { type: string }
+        price_tag: { type: string, nullable: true }
+        uom: { type: string }
+        qty: { type: number, format: double, nullable: true }
+        stock_value: { type: number, format: double, nullable: true }
+
+    StockItemBarcode:
+      type: object
+      properties:
+        autokey: { type: integer }
+        barcode: { type: string }
+        uom: { type: string }
+
+    StockItemPriceItem:
+      type: object
+      description: >
+        One line in a PUT /stock-items/{code}/prices request. Omit `dtlkey`
+        to create a new price line; include it to replace the existing
+        line with that key.
+      properties:
+        dtlkey: { type: integer, nullable: true }
+        price_tag: { type: string }
+        uom: { type: string }
+        qty: { type: number, format: double, nullable: true }
+        stock_value: { type: number, format: double, nullable: true }
+      required: [price_tag, uom]
+
+    PutStockItemPricesRequest:
+      type: object
+      properties:
+        prices:
+          type: array
+          items: { $ref: "#/components/schemas/StockItemPriceItem" }
+      required: [prices]
+
+    GLAccount:
+      type: object
+      properties:
+        dockey: { type: integer }
+        parent: { type: integer }
+        code: { type: string }
+        description: { type: string }
+        description2: { type: string }
+        acc_type: { type: string }
+        special_acc_type: { type: string }
+        tax: { type: string }
+        cash_flow_type: { type: integer, nullable: true }
+        sic: { type: string }
+
+    PaymentMethod:
+      type: object
+      properties:
+        code: { type: string }
+        journal: { type: string }
+        currency_code: { type: string }
+        description:
+          type: string
+          description: Joined from GL_ACC via CODE.
+
+    Project:
+      type: object
+      properties:
+        code: { type: string }
+        description: { type: string }
+        description2: { type: string }
+        project_value: { type: number, format: double, nullable: true }
+        project_cost: { type: number, format: double, nullable: true }
+        is_active: { type: boolean, nullable: true }
+
+    PaymentVoucherDetail:
+      type: object
+      properties:
+        code:
+          type: string
+          description: GL account code for this line.
+        description: { type: string }
+        amount: { type: number, format: double }
+        project: { type: string }
+      required: [code, amount]
+
+    PaymentVoucherRequest:
+      type: object
+      properties:
+        dockey:
+          type: string
+          description: Leave blank — the vendor assigns the document number.
+        docdate: { type: string, format: date }
+        paymentmethod:
+          type: string
+          description: Payment method code (see GET /payment-methods).
+        description: { type: string }
+        project: { type: string }
+        docamt: { type: number, format: double }
+        sdsdocdetail:
+          type: array
+          items: { $ref: "#/components/schemas/PaymentVoucherDetail" }
+      required: [paymentmethod, docamt, sdsdocdetail]
