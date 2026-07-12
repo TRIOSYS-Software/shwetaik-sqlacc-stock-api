@@ -46,6 +46,14 @@ type STItem struct {
 	LastModified       *int64          `json:"last_modified,omitempty" gorm:"column:LASTMODIFIED"`
 	STItemPrices       []STItemPrice   `json:"st_item_prices,omitempty" gorm:"foreignKey:Code;references:Code"`
 	STItemBarcodes     []STItemBarcode `json:"st_item_barcodes,omitempty" gorm:"foreignKey:Code;references:Code"`
+
+	// Balance and Location are derived from ST_TR (stock transactions), not
+	// columns on ST_ITEM itself — gorm:"-" excludes them from any SELECT
+	// against this table. Location is only set when the caller filtered by
+	// a specific location; Balance is the SUM(QTY) for that location, or
+	// across all locations when none was given.
+	Balance  float64 `json:"balance" gorm:"-"`
+	Location *string `json:"location,omitempty" gorm:"-"`
 }
 
 func (STItem) TableName() string {

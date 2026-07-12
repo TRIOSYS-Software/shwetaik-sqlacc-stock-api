@@ -41,20 +41,25 @@ func (u StockItemUseCase) GetAllStockItems(filter map[string]any) ([]*dto.StockI
 				UOM:     stockItemBarcode.UOM,
 			})
 		}
-		response = append(response, &dto.StockItemResponse{
+		item := &dto.StockItemResponse{
 			DocKey:         stockItem.DocKey,
 			Code:           stockItem.Code,
 			Description:    *stockItem.Description,
 			StockGroup:     stockItem.StockGroup,
+			Balance:        stockItem.Balance,
 			STItemBarcodes: stockItemBarcodesDTO,
 			STItemPrices:   stockItemPricesDTO,
-		})
+		}
+		if stockItem.Location != nil {
+			item.Location = *stockItem.Location
+		}
+		response = append(response, item)
 	}
 	return response, nil
 }
 
-func (u StockItemUseCase) GetStockItemByCode(code string) (*dto.StockItemResponse, error) {
-	stockItem, err := u.repo.GetStockItemByCode(code)
+func (u StockItemUseCase) GetStockItemByCode(code string, location string) (*dto.StockItemResponse, error) {
+	stockItem, err := u.repo.GetStockItemByCode(code, location)
 	if err != nil {
 		return nil, err
 	}
@@ -82,8 +87,12 @@ func (u StockItemUseCase) GetStockItemByCode(code string) (*dto.StockItemRespons
 		Code:           stockItem.Code,
 		Description:    *stockItem.Description,
 		StockGroup:     stockItem.StockGroup,
+		Balance:        stockItem.Balance,
 		STItemPrices:   stockItemPriceDTO,
 		STItemBarcodes: stockItemBarcodeDTO,
+	}
+	if stockItem.Location != nil {
+		response.Location = *stockItem.Location
 	}
 	return &response, nil
 }

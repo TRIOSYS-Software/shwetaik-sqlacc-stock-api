@@ -30,6 +30,7 @@ func (s *StockItemHandler) GetAllStockItems(c *fiber.Ctx) error {
 	filter["after"] = c.Query("after", "")
 	filter["stock_group"] = c.Query("stock_group", "")
 	filter["description"] = c.Query("description", "")
+	filter["location"] = c.Query("location", "")
 
 	response, err := s.usecase.GetAllStockItems(filter)
 	if err != nil {
@@ -53,7 +54,8 @@ func (s *StockItemHandler) GetStockItemByCode(c *fiber.Ctx) error {
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, err.Error())
 	}
-	response, err := s.usecase.GetStockItemByCode(code)
+	location := c.Query("location", "")
+	response, err := s.usecase.GetStockItemByCode(code, location)
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, err.Error())
 	}
