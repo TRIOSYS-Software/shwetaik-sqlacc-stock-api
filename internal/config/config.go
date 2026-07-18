@@ -11,10 +11,11 @@ import (
 var Cfg *Config
 
 type Config struct {
-	Host       string
-	Port       string
-	DBString   string
-	JWT_SECRET string
+	Host        string
+	Port        string
+	DBString    string
+	JWT_SECRET  string
+	ServiceName string
 
 	SQLAccountAPIHost         string
 	SQLAccountAPIAccessKey    string
@@ -37,6 +38,7 @@ func Load() *Config {
 	config.Port = getEnv("PORT", "8080")
 	config.DBString = getEnv("DB_STRING", "")
 	config.JWT_SECRET = getEnv("JWT_SECRET", "")
+	config.ServiceName = getEnv("SERVICE_NAME", "stock-api")
 
 	// Vendor (SQL Account) API credentials — optional until the wrapped
 	// write endpoints are actually used, so these don't fail startup.

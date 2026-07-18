@@ -1,15 +1,16 @@
-package main
+package scripts
 
 import (
+	"shwetaik-sqlacc-stock-api/internal/config"
 	"shwetaik-sqlacc-stock-api/pkg/utils"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 )
 
-func main() {
+func GenerateJWTToken() {
 	claims := utils.ServiceClaims{
-		Service: "stock-api",
+		Service: config.Cfg.ServiceName,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour * 3600)),
 		},

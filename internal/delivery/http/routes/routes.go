@@ -15,6 +15,11 @@ func SetupRoutes(app *fiber.App, container *container.AppContainer) {
 		AllowOrigins: "*",
 		AllowHeaders: "Origin, Content-Type, Accept",
 	}))
+
+	// API docs (Swagger UI + the raw OpenAPI spec) are intentionally outside
+	// the auth-protected group below — they're static files, not API data.
+	app.Static("/docs", "./docs")
+
 	api := app.Group("/api/v1")
 
 	api.Use(middleware.AuthMiddleware)
