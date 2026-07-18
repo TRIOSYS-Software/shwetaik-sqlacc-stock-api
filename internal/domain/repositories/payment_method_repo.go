@@ -6,4 +6,5 @@ import (
 
 type PaymentMethodRepository interface {
 	GetAllPaymentMethods() ([]entities.PaymentMethod, error)
+	GetPaymentMethodByCode(code string) (*entities.PaymentMethod, error)
 }

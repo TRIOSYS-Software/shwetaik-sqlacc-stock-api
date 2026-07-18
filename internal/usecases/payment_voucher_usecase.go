@@ -31,7 +31,7 @@ func (u PaymentVoucherUseCase) CreateExpensePaymentVoucher(ctx context.Context, 
 		})
 	}
 	payload := map[string]any{
-		"docno":         req.DocKey,
+		"docno":         req.DocNo,
 		"docdate":       req.DocDate,
 		"paymentmethod": req.PaymentMethod,
 		"description":   req.Description,

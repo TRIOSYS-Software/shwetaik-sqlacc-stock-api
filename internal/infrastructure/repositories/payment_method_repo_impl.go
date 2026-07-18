@@ -30,3 +30,11 @@ func (r *PaymentMethodRepositoryImpl) GetAllPaymentMethods() ([]entities.Payment
 	}
 	return paymentMethods, nil
 }
+
+func (r *PaymentMethodRepositoryImpl) GetPaymentMethodByCode(code string) (*entities.PaymentMethod, error) {
+	var paymentMethod entities.PaymentMethod
+	if err := r.db.Table("PMMETHOD").Where("CODE = ?", code).First(&paymentMethod).Error; err != nil {
+		return nil, err
+	}
+	return &paymentMethod, nil
+}
