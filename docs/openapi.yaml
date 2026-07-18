@@ -362,6 +362,45 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ErrorEnvelope" }
 
+  /payment-vouchers/direct:
+    post:
+      tags: [Payment Vouchers]
+      summary: Create a payment voucher (direct database write)
+      description: >
+        Same request shape as POST /payment-vouchers, but writes directly
+        into GL_CB/GL_CBDTL/GL_TRANS instead of calling the vendor REST API —
+        a workaround for a vendor-side issue in that endpoint that can't be
+        fixed from our side. docamt is ignored; it's always recomputed
+        server-side as the sum of the detail line amounts, since the ledger
+        must balance regardless of what the client sends. localamount and
+        currencyamount on each posted line are set equal to amount (this
+        request shape carries no FX conversion info, i.e. CurrencyRate 1:1).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PaymentVoucherRequest" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/PaymentResponse" }
+        "400":
+          description: Validation error (missing paymentmethod, empty sdsdocdetail, missing code, or zero amount on a line)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/Error"
+
 webhooks:
   itemUpdated:
     post:
@@ -600,3 +639,24 @@ components:
           type: array
           items: { $ref: "#/components/schemas/PaymentVoucherDetail" }
       required: [paymentmethod, docamt, sdsdocdetail]
+
+    PaymentDetailResponse:
+      type: object
+      properties:
+        dtlkey: { type: integer, description: "Auto-assigned negative key (GL_CBDTL.DTLKEY)." }
+        code: { type: string }
+        description: { type: string }
+        amount: { type: number, format: double }
+
+    PaymentResponse:
+      type: object
+      properties:
+        dockey: { type: integer, description: "Auto-assigned negative key (GL_CB.DOCKEY) — a draft/pending document pending renumbering by the desktop client." }
+        docno: { type: string }
+        paymentmethod: { type: string }
+        description: { type: string }
+        project: { type: string }
+        docamt: { type: number, format: double, description: "Recomputed server-side as the sum of the detail line amounts." }
+        details:
+          type: array
+          items: { $ref: "#/components/schemas/PaymentDetailResponse" }
