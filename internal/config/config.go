@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"strconv"
 	"strings"
 
 	fiberlog "github.com/gofiber/fiber/v2/log"
@@ -11,11 +12,12 @@ import (
 var Cfg *Config
 
 type Config struct {
-	Host        string
-	Port        string
-	DBString    string
-	JWT_SECRET  string
-	ServiceName string
+	Host            string
+	Port            string
+	DBString        string
+	JWT_SECRET      string
+	ServiceName     string
+	StockMonitoring bool
 
 	SQLAccountAPIHost         string
 	SQLAccountAPIAccessKey    string
@@ -39,6 +41,7 @@ func Load() *Config {
 	config.DBString = getEnv("DB_STRING", "")
 	config.JWT_SECRET = getEnv("JWT_SECRET", "")
 	config.ServiceName = getEnv("SERVICE_NAME", "stock-api")
+	config.StockMonitoring = getBoolEnv("STOCK_MONITORING")
 
 	// Vendor (SQL Account) API credentials — optional until the wrapped
 	// write endpoints are actually used, so these don't fail startup.
@@ -77,6 +80,19 @@ func getEnv(key, defaultValue string) string {
 		fiberlog.Fatalf("environment variable %q not set", key)
 	}
 	return defaultValue
+}
+
+func getBoolEnv(key string) bool {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return true
+	}
+	parsed, err := strconv.ParseBool(value)
+	if err != nil {
+		fiberlog.Warnf("invalid boolean value %q for %s, defaulting to true", value, key)
+		return true
+	}
+	return parsed
 }
 
 func init() {

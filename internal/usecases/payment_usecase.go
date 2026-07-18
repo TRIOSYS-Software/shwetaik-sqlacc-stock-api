@@ -17,6 +17,18 @@ func NewPaymentUseCase(repo repositories.PaymentRepository) *PaymentUseCase {
 	return &PaymentUseCase{repo: repo}
 }
 
+// ValidationError marks a CreatePayment failure as a client input problem
+// (should map to 400), as opposed to a repo/DB error (should map to 500).
+type ValidationError struct {
+	msg string
+}
+
+func (e *ValidationError) Error() string { return e.msg }
+
+func newValidationError(format string, args ...any) error {
+	return &ValidationError{msg: fmt.Sprintf(format, args...)}
+}
+
 // docDateLayouts are the formats accepted for PaymentVoucherRequest.DocDate,
 // tried in order.
 var docDateLayouts = []string{time.RFC3339, "2006-01-02"}
@@ -33,7 +45,25 @@ func parseDocDate(value string) (time.Time, error) {
 			lastErr = err
 		}
 	}
-	return time.Time{}, fmt.Errorf("docdate %q is not a valid date (expected RFC3339 or YYYY-MM-DD): %w", value, lastErr)
+	return time.Time{}, newValidationError("docdate %q is not a valid date (expected RFC3339 or YYYY-MM-DD): %v", value, lastErr)
+}
+
+func validateCreatePaymentRequest(req dto.PaymentVoucherRequest) error {
+	if req.PaymentMethod == "" {
+		return newValidationError("paymentmethod is required")
+	}
+	if len(req.Details) == 0 {
+		return newValidationError("sdsdocdetail must contain at least one line")
+	}
+	for i, d := range req.Details {
+		if d.Code == "" {
+			return newValidationError("sdsdocdetail[%d].code is required", i)
+		}
+		if d.Amount == 0 {
+			return newValidationError("sdsdocdetail[%d].amount must be non-zero", i)
+		}
+	}
+	return nil
 }
 
 // CreatePayment accepts the same request shape as the vendor-API-backed
@@ -42,6 +72,10 @@ func parseDocDate(value string) (time.Time, error) {
 // recomputed server-side as the sum of the detail amounts, since the ledger
 // must balance regardless of what the client sends.
 func (u PaymentUseCase) CreatePayment(req dto.PaymentVoucherRequest) (*dto.PaymentResponse, error) {
+	if err := validateCreatePaymentRequest(req); err != nil {
+		return nil, err
+	}
+
 	docDate, err := parseDocDate(req.DocDate)
 	if err != nil {
 		return nil, err

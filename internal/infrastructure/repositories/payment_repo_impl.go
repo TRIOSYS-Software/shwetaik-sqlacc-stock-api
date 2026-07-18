@@ -1,7 +1,9 @@
 package repositories
 
 import (
+	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"shwetaik-sqlacc-stock-api/internal/domain/entities"
@@ -13,6 +15,10 @@ import (
 // newRecordSeed is the negative primary-key value SQL Account uses to mark a
 // row as a draft/pending document not yet renumbered by the desktop client.
 const newRecordSeed = -1
+
+// maxCreateAttempts bounds the retry loop in Create — see its comment for
+// why a retry is needed at all.
+const maxCreateAttempts = 3
 
 // PaymentRepositoryImpl writes payments directly into the live GL_CB /
 // GL_CBDTL / GL_TRANS tables, bypassing the vendor REST API entirely. This
@@ -30,7 +36,53 @@ func NewPaymentRepository(db *gorm.DB, paymentMethodRepo repositories.PaymentMet
 	return &PaymentRepositoryImpl{db: db, paymentMethodRepo: paymentMethodRepo}
 }
 
-func (r *PaymentRepositoryImpl) Create(payment *entities.Payment) (err error) {
+// Create allocates negative keys from the current minimum row in each table
+// (see createOnce), which races if two requests read the same "first" row
+// concurrently — both then try to insert the same key. Rather than locking
+// (unverified whether the Firebird GORM dialect honors FOR UPDATE), this
+// retries on what looks like a primary/unique-key collision, re-reading the
+// current minimum fresh each attempt.
+func (r *PaymentRepositoryImpl) Create(payment *entities.Payment) error {
+	// createOnce nils payment.Details out once the detail rows are inserted
+	// (see its comment), so a retry needs the original slice restored —
+	// otherwise a failure after that point would retry with zero detail
+	// lines.
+	originalDetails := payment.Details
+
+	var lastErr error
+	for attempt := 1; attempt <= maxCreateAttempts; attempt++ {
+		payment.Details = originalDetails
+		err := r.createOnce(payment)
+		if err == nil {
+			return nil
+		}
+		if !isKeyCollision(err) {
+			return err
+		}
+		lastErr = err
+		time.Sleep(20 * time.Millisecond)
+	}
+	return fmt.Errorf("payment create: gave up after %d attempts on key collision: %w", maxCreateAttempts, lastErr)
+}
+
+// isKeyCollision reports whether err looks like a primary/unique-key
+// constraint violation — the retryable case in Create. gorm.ErrDuplicatedKey
+// only fires if the dialect implements GORM's error-translator interface;
+// flylink888/gorm-firebird is a small community driver that may not, so this
+// also falls back to matching Firebird's own violation message text. That
+// text match hasn't been verified against a live Firebird error, so treat it
+// as best-effort — worth confirming against real driver output.
+func isKeyCollision(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, gorm.ErrDuplicatedKey) {
+		return true
+	}
+	return strings.Contains(strings.ToLower(err.Error()), "violation of primary or unique key constraint")
+}
+
+func (r *PaymentRepositoryImpl) createOnce(payment *entities.Payment) (err error) {
 	tx := r.db.Begin()
 	defer func() {
 		if rec := recover(); rec != nil {
@@ -49,6 +101,22 @@ func (r *PaymentRepositoryImpl) Create(payment *entities.Payment) (err error) {
 	if err := tx.First(&firstDetail).Error; err != nil && err != gorm.ErrRecordNotFound {
 		tx.Rollback()
 		return err
+	}
+
+	var firstGLTrans entities.GLTrans
+	if err := tx.First(&firstGLTrans).Error; err != nil && err != gorm.ErrRecordNotFound {
+		tx.Rollback()
+		return err
+	}
+	// nextGLTransDocKey tracks the next negative GL_TRANS.DOCKEY to use.
+	// Re-derived once here instead of re-querying inside createGLTrans for
+	// every row: within this one transaction nothing else can insert
+	// between our own calls, so the row we just inserted is always the new
+	// minimum — decrementing locally is equivalent to re-querying it, without
+	// the extra round trip per detail line.
+	nextGLTransDocKey := firstGLTrans.DocKey - 1
+	if firstGLTrans.DocKey > 0 {
+		nextGLTransDocKey = newRecordSeed
 	}
 
 	// Matches the reference implementation: the payment-method lookup runs
@@ -109,7 +177,7 @@ func (r *PaymentRepositoryImpl) Create(payment *entities.Payment) (err error) {
 		if payment.Details[i].Description != nil {
 			detailDescription = *payment.Details[i].Description
 		}
-		if err := r.createGLTrans(tx, payment.Details[i].Code, detailDescription, payment, payment.Details[i].Amount, 0, payment.Details[i].CurrencyAmount, 0, "S", payment.Details[i].DtlKey); err != nil {
+		if err := r.createGLTrans(tx, &nextGLTransDocKey, payment.Details[i].Code, detailDescription, payment, payment.Details[i].Amount, 0, payment.Details[i].CurrencyAmount, 0, "S", payment.Details[i].DtlKey); err != nil {
 			tx.Rollback()
 			return err
 		}
@@ -121,7 +189,7 @@ func (r *PaymentRepositoryImpl) Create(payment *entities.Payment) (err error) {
 	if payment.Description != nil {
 		paymentDescription = *payment.Description
 	}
-	if err := r.createGLTrans(tx, payment.PaymentMethod, paymentDescription, payment, 0, payment.DocAmt, 0, payment.LocalDocAmt, "M", payment.DocKey); err != nil {
+	if err := r.createGLTrans(tx, &nextGLTransDocKey, payment.PaymentMethod, paymentDescription, payment, 0, payment.DocAmt, 0, payment.LocalDocAmt, "M", payment.DocKey); err != nil {
 		tx.Rollback()
 		return err
 	}
@@ -137,6 +205,7 @@ func (r *PaymentRepositoryImpl) Create(payment *entities.Payment) (err error) {
 
 func (r *PaymentRepositoryImpl) createGLTrans(
 	tx *gorm.DB,
+	nextDocKey *int,
 	code string,
 	description string,
 	payment *entities.Payment,
@@ -147,12 +216,8 @@ func (r *PaymentRepositoryImpl) createGLTrans(
 	tableType string,
 	fromKey int,
 ) error {
-	var firstGLTrans entities.GLTrans
-	if err := tx.First(&firstGLTrans).Error; err != nil && err != gorm.ErrRecordNotFound {
-		return err
-	}
-
 	glTrans := entities.GLTrans{
+		DocKey:       *nextDocKey,
 		GLTransID:    int64(payment.GLTransID),
 		Code:         code,
 		Area:         payment.Area,
@@ -173,11 +238,9 @@ func (r *PaymentRepositoryImpl) createGLTrans(
 		Cancelled:    payment.Cancelled,
 	}
 
-	if firstGLTrans.DocKey > 0 {
-		glTrans.DocKey = newRecordSeed
-	} else {
-		glTrans.DocKey = firstGLTrans.DocKey - 1
+	if err := tx.Create(&glTrans).Error; err != nil {
+		return err
 	}
-
-	return tx.Create(&glTrans).Error
+	*nextDocKey--
+	return nil
 }

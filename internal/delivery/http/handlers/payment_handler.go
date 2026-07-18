@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"errors"
+
 	"shwetaik-sqlacc-stock-api/internal/delivery/dto"
 	"shwetaik-sqlacc-stock-api/internal/usecases"
 	"shwetaik-sqlacc-stock-api/pkg/utils"
@@ -24,6 +26,10 @@ func (h *PaymentHandler) CreatePayment(c *fiber.Ctx) error {
 
 	response, err := h.usecase.CreatePayment(req)
 	if err != nil {
+		var verr *usecases.ValidationError
+		if errors.As(err, &verr) {
+			return utils.ErrorResponse(c, fiber.StatusBadRequest, err.Error())
+		}
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, err.Error())
 	}
 	return utils.SuccessResponse(c, "success", response)
