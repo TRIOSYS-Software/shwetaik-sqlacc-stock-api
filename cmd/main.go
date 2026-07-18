@@ -31,7 +31,9 @@ func main() {
 	}
 
 	webhookClient := webhook.NewClient(cfg.WebhookURLs)
-	monitor.StartStockItemChangeMonitor(db, webhookClient, 30*time.Second)
+	if cfg.StockMonitoring {
+		monitor.StartStockItemChangeMonitor(db, webhookClient, 30*time.Second)
+	}
 
 	app := fiber.New()
 

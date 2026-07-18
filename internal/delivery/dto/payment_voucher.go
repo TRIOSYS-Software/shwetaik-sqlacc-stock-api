@@ -8,7 +8,7 @@ type PaymentVoucherDetail struct {
 }
 
 type PaymentVoucherRequest struct {
-	DocKey        string                 `json:"dockey"`
+	DocNo         string                 `json:"docno"`
 	DocDate       string                 `json:"docdate"`
 	PaymentMethod string                 `json:"paymentmethod"`
 	Description   string                 `json:"description"`

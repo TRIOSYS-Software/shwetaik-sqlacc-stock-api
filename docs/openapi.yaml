@@ -340,7 +340,7 @@ paths:
       description: >
         Writes through the vendor SQL Account API (not the database) —
         POSTs to the vendor's `/paymentvoucher` endpoint, signed with AWS
-        SigV4. `dockey` is left blank; the vendor assigns it.
+        SigV4. `docno` is left blank; the vendor assigns it.
       requestBody:
         required: true
         content:
@@ -586,7 +586,7 @@ components:
     PaymentVoucherRequest:
       type: object
       properties:
-        dockey:
+        docno:
           type: string
           description: Leave blank — the vendor assigns the document number.
         docdate: { type: string, format: date }

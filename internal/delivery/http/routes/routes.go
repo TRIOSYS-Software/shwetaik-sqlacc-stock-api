@@ -29,6 +29,7 @@ func SetupRoutes(app *fiber.App, container *container.AppContainer) {
 	initPaymentMethodRoutes(api, container.PaymentMethodHandler)
 	initProjectRoutes(api, container.ProjectHandler)
 	initPaymentVoucherRoutes(api, container.PaymentVoucherHandler)
+	initPaymentRoutes(api, container.PaymentHandler)
 }
 
 func initStockItemRoutes(api fiber.Router, handler *handlers.StockItemHandler) {
@@ -64,4 +65,13 @@ func initProjectRoutes(api fiber.Router, handler *handlers.ProjectHandler) {
 func initPaymentVoucherRoutes(api fiber.Router, handler *handlers.PaymentVoucherHandler) {
 
 	api.Post("/payment-vouchers", handler.CreatePaymentVoucher)
+}
+
+// initPaymentRoutes registers the direct-DB payment creation path — a
+// workaround for a vendor-API-side issue in POST /payment-vouchers that
+// can't be fixed from our side. It writes straight into GL_CB/GL_CBDTL/
+// GL_TRANS instead of calling the vendor REST API.
+func initPaymentRoutes(api fiber.Router, handler *handlers.PaymentHandler) {
+
+	api.Post("/payment-vouchers/direct", handler.CreatePayment)
 }
